@@ -1,0 +1,147 @@
+/* --- 1. CẤU HÌNH CHUNG --- */
+:root {
+    --primary-color: #007bff;
+    --success-color: #28a745;
+    --bg-overlay: rgba(0, 0, 0, 0.4); /* Lớp phủ tối đè lên ảnh nền */
+    --card-bg: rgba(255, 255, 255, 0.96); /* Nền thẻ trắng đục 96% */
+    --text-main: #2c3e50; /* Chữ màu xám đậm (Rất dễ đọc) */
+    --text-muted: #6c757d;
+}
+
+body {
+    background-image: url('../images/pic2.jpg');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+    min-height: 100vh;
+    /* Quan trọng: Xóa bỏ dòng color: white cũ nếu có */
+}
+
+/* Thêm lớp phủ tối lên toàn bộ body để làm dịu ảnh nền */
+body::before {
+    content: "";
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: var(--bg-overlay);
+    z-index: -1;
+}
+
+/* --- 2. NAVBAR (Giữ màu tối cho Navbar) --- */
+.navbar {
+    background: #111 !important; /* Đen hoàn toàn */
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+.navbar-brand, .nav-link {
+    color: #fff !important; /* Chữ trên menu vẫn là trắng */
+}
+
+/* --- 3. THẺ CARD CHÍNH (QUAN TRỌNG NHẤT) --- */
+.glass-card {
+    background: var(--card-bg) !important; /* Nền trắng đục */
+    backdrop-filter: blur(10px); /* Làm mờ ảnh phía sau */
+    border-radius: 15px;
+    padding: 40px;
+    box-shadow: 0 15px 40px rgba(0,0,0,0.3); /* Bóng đổ đậm để nổi khối */
+    border: 1px solid rgba(255,255,255,0.6);
+    margin-top: 30px;
+}
+
+/* --- 4. CHỈNH MÀU CHỮ TRONG THẺ --- */
+/* Ép buộc tất cả chữ trong thẻ thành màu tối */
+.glass-card h2, 
+.glass-card h5, 
+.glass-card label, 
+.glass-card p,
+.glass-card div {
+    color: var(--text-main) !important;
+    text-shadow: none !important; /* Bỏ bóng chữ gây nhòe */
+}
+
+.card-header-custom h2 {
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 5px;
+}
+
+/* --- 5. SECTION BOX (Khung chia cột) --- */
+.section-box {
+    background: #f8f9fa; /* Nền xám rất nhạt */
+    border: 1px solid #dee2e6; /* Viền xám */
+    border-radius: 12px;
+    padding: 25px;
+    height: 100%;
+}
+
+.section-title {
+    font-weight: 700;
+    border-bottom: 2px solid #e9ecef;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+}
+
+/* --- 6. INPUT FIELDS (Ô nhập liệu) --- */
+.form-label {
+    font-weight: 700;
+    font-size: 0.95rem;
+}
+
+.form-control {
+    background-color: #ffffff !important;
+    border: 1px solid #ced4da !important;
+    color: #000000 !important; /* Chữ khi gõ là màu đen */
+    font-weight: 600;
+    padding: 12px;
+    border-radius: 8px;
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.form-control:focus {
+    border-color: #007bff !important;
+    box-shadow: 0 0 0 4px rgba(0,123,255,0.15) !important;
+    background-color: #fff !important;
+}
+
+/* Đuôi đơn vị (W, m2, kWh) */
+.input-group-text {
+    background-color: #e9ecef;
+    border: 1px solid #ced4da;
+    color: #495057;
+    font-weight: bold;
+}
+
+/* --- 7. NÚT BẤM --- */
+.btn-save {
+    background: linear-gradient(135deg, #0d6efd, #0b5ed7);
+    color: white !important;
+    font-size: 1.1rem;
+    padding: 15px 50px;
+    border-radius: 50px;
+    border: none;
+    box-shadow: 0 4px 15px rgba(13, 110, 253, 0.4);
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.3s;
+}
+
+.btn-save:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(13, 110, 253, 0.5);
+    background: linear-gradient(135deg, #0b5ed7, #0a58ca);
+}
+
+/* --- 8. Ghi chú nhỏ --- */
+.form-text {
+    font-size: 0.85rem;
+    margin-top: 5px;
+}
+.text-danger { color: #dc3545 !important; }
+.text-muted { color: #6c757d !important; }
+
+/* Responsive */
+@media (max-width: 768px) {
+    .glass-card { padding: 20px; }
+    .section-box { padding: 15px; margin-bottom: 20px;}
+}

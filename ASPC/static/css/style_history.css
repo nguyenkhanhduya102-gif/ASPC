@@ -1,0 +1,177 @@
+/* FILE: style_history.css 
+   Tối ưu: Navbar đen, Chữ ASPC nổi, Ô nhập trắng dài, Bố cục Logic 
+*/
+
+:root {
+    --accent: #c9a26a;          /* Vàng kim chủ đạo */
+    --accent-hover: #e0b97c;
+    --bg-dark: #0f0f0f;         /* Nền khối tối */
+    --text-white:var(--bg-dark)
+}
+
+body {
+    background-image: url('../images/pic2.jpg');
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    background-position: center center;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    color: var(--text-white) !important;
+}
+
+/* ===== 1. NAVBAR ĐEN TUYỀN & CHỮ ASPC SÁNG ===== */
+.navbar.navbar-light {
+    background-color: #000000 !important; /* Đen đặc tuyệt đối */
+    border-bottom: 2px solid var(--accent) !important;
+    height: 80px;
+    display: flex;
+    align-items: center;
+}
+
+.navbar-brand {
+    color: #ffffff !important; /* Hiện chữ ASPC trắng sáng */
+    font-size: 28px !important;
+    font-weight: 900 !important;
+    letter-spacing: 2px;
+    opacity: 1 !important;
+}
+
+.navbar-nav .nav-link {
+    color: #ffffff !important;
+    opacity: 1 !important;
+    font-weight: 600 !important;
+    margin: 0 10px;
+}
+
+.navbar-nav .nav-link:hover, 
+.navbar-nav .nav-link.active {
+    color: var(--accent) !important;
+}
+
+/* ===== 2. KHỐI NỘI DUNG (SETTINGS / HISTORY CARD) ===== */
+#settings-screen, .section-card {
+    max-width: 600px; /* Làm rộng khung ra để logic hơn */
+    margin: 80px auto;
+    padding: 40px;
+    background-color:#ffffff !important; /* Nền khối đen sâu */
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+}
+
+#settings-screen h2, .section-card h2 {
+    text-align: center;
+    color:#000000 !important;
+    margin-bottom: 35px;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+/* ===== 3. Ô NHẬP LIỆU: DÀI, NỀN TRẮNG, LOGIC ===== */
+.metric-label {
+    display: block;
+    margin-top: 20px;
+    margin-bottom: 8px;
+    font-weight: 700;
+    color:aliceblue !important; /* Nhãn vàng cho dễ phân biệt */
+    font-size: 14px;
+    text-transform: uppercase;
+}
+
+/* Sửa lỗi ô bị đen và ngắn */
+.auth-form input[type="text"], 
+#date-filter.form-control {
+    width: 100% !important;        /* Dài hết khung */
+    padding: 15px 20px !important; /* Ô cao và thoáng */
+    background-color:#ffffff!important; /* NỀN TRẮNG TUYỆT ĐỐI */
+    color: #000000 !important;           /* CHỮ ĐEN RÕ NÉT */
+    border: 2px solid #ced4da !important;
+    border-radius: 12px !important;
+    font-size: 16px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.auth-form input[type="text"]:focus,
+#date-filter.form-control:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 12px rgba(101, 179, 207, 0.4) !important;
+    outline: none;
+}
+
+/* Nút bấm vàng kim */
+.auth-form button, .btn-info {
+    width: 100% !important;
+    background-color: var(--accent) !important;
+    color: #000000 !important;
+    padding: 15px;
+    border: none !important;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: 17px;
+    margin-top: 30px;
+    text-transform: uppercase;
+    transition: 0.3s;
+}
+
+.auth-form button:hover, .btn-info:hover {
+    background-color: var(--accent-hover) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(105, 158, 208, 0.3);
+}
+
+/* Bảng lịch sử */
+.table {
+    color:#ffffff !important;
+    margin-top: 20px;
+}
+.table thead th {
+    color: var(--accent) !important;
+    border-bottom: 2px solid var(--accent);
+}
+/* Badge trạng thái BẬT/TẮT */
+.status-badge {
+    padding: 5px 12px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 0.85em;
+    text-transform: uppercase;
+}
+.status-on {
+    background-color: #28a745; /* Xanh lá cho BẬT */
+    color: white;
+}
+.status-off {
+    background-color: #6c757d; /* Xám cho TẮT */
+    color: white;
+}
+
+/* Tag hiển thị Nguồn lệnh (Smart/Auto/Manual) */
+.source-tag {
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    font-weight: 600;
+    border: 1px solid rgba(255,255,255,0.2);
+}
+
+/* Màu riêng cho Smart Eco (Vẫn hợp nền tối) */
+.source-smart {
+    background-color: rgba(40, 167, 69, 0.2);
+    color: #4cd137; /* Chữ xanh lá sáng */
+    border-color: #4cd137;
+}
+
+/* Màu cho Auto cũ */
+.source-auto {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #dcdde1; /* Chữ trắng xám */
+}
+
+/* Màu cho Thủ công */
+.source-manual {
+    background-color: rgba(0, 123, 255, 0.2);
+    color: #00a8ff; /* Chữ xanh dương sáng */
+    border-color: #00a8ff;
+}

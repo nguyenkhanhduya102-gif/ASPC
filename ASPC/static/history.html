@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lịch Sử Hoạt Động | ASPC</title>
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/parameter.css') }}">
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js" defer></script>
+
+    <style>
+        /* Tùy chỉnh riêng cho bảng lịch sử */
+        .table-responsive {
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .table {
+            margin-bottom: 0;
+            vertical-align: middle;
+        }
+        .table thead th {
+            background-color: #f1f3f5;
+            color: #495057;
+            border-bottom: 2px solid #dee2e6;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            font-weight: 700;
+        }
+        /* Badge trạng thái */
+        .badge-custom {
+            padding: 8px 12px;
+            border-radius: 30px;
+            font-weight: 600;
+            font-size: 0.8rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-dark">
+      <div class="container-fluid">
+        <a class="navbar-brand fw-bold" href="/"><i class="fas fa-solar-panel me-2"></i>A S P C</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navContent">
+          <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+            <li class="nav-item"><a class="nav-link" href="./index.html">Dashboard</a></li>
+            <li class="nav-item"><a class="nav-link active" href="#">Lịch Sử</a></li>
+            <li class="nav-item"><a class="nav-link" href="./parameter.html">Cài Đặt</a></li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                
+                <div class="glass-card fade-in-up">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2 class="mb-0"><i class="fas fa-history text-primary"></i> Nhật Ký Hoạt Động</h2>
+                        <button class="btn btn-outline-primary btn-sm" onclick="loadHistory()">
+                            <i class="fas fa-sync-alt"></i> Làm mới
+                        </button>
+                    </div>
+                    
+                    <p class="text-muted fst-italic mb-4">Hiển thị 50 hành động gần nhất của hệ thống (Bao gồm cả 3 chế độ).</p>
+
+                    <div class="table-responsive shadow-sm">
+                        <table class="table table-hover bg-white">
+                            <thead>
+                                <tr>
+                                    <th>Thời gian</th>
+                                    <th>Đối tượng</th>
+                                    <th class="text-center">Hành động</th>
+                                    <th>Chi tiết / Loại</th>
+                                    <th class="text-end">Nguồn lệnh</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-table-body">
+                                <tr>
+                                    <td colspan="5" class="text-center py-4">
+                                        <div class="spinner-border text-primary" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', loadHistory);
+
+        function loadHistory() {
+            fetch('/api/get_history')
+                .then(response => response.json())
+                .then(data => {
+                    const tbody = document.getElementById('history-table-body');
+                    tbody.innerHTML = ''; // Xóa loading
+
+                    if (data.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">Chưa có dữ liệu lịch sử</td></tr>';
+                        return;
+                    }
+
+                    data.forEach(row => {
+                        // 1. Xử lý màu sắc Hành Động
+                        let actionBadge = '';
+                        if (row.command === 'BẬT' || row.command === '2') {
+                            actionBadge = '<span class="badge bg-success">BẬT</span>';
+                        } else if (row.command === 'TẮT' || row.command === '0') {
+                            actionBadge = '<span class="badge bg-secondary">TẮT</span>';
+                        } else {
+                            actionBadge = `<span class="badge bg-info text-dark">${row.command}</span>`;
+                        }
+
+                        // 2. Xử lý Nguồn Lệnh (Quan trọng cho 3 chế độ)
+                        let sourceBadge = '';
+                        let sourceIcon = '';
+                        let sourceClass = '';
+
+                        // Logic phân loại mới
+                        if (row.source === 'SMART_ECO') {
+                            sourceClass = 'bg-success'; // Xanh lá
+                            sourceIcon = 'fa-leaf';
+                            row.source = 'Smart Eco (AI)';
+                        } 
+                        else if (row.source === 'AI_AUTO' || row.source === 'AUTO') {
+                            sourceClass = 'bg-dark'; // Đen/Xám đậm
+                            sourceIcon = 'fa-robot';
+                            if(row.source === 'AI_AUTO') row.source = 'Tự động (Nhiệt)';
+                        } 
+                        else if (row.source === 'WEB' || row.source === 'MANUAL') {
+                            sourceClass = 'bg-primary'; // Xanh dương
+                            sourceIcon = 'fa-hand-pointer';
+                            row.source = 'Thủ công (Web)';
+                        }
+                        else {
+                            sourceClass = 'bg-secondary';
+                            sourceIcon = 'fa-server';
+                        }
+
+                        sourceBadge = `<span class="badge-custom ${sourceClass} text-white">
+                                        <i class="fas ${sourceIcon}"></i> ${row.source}
+                                       </span>`;
+
+                        // 3. Render hàng
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td style="font-family: monospace; font-weight: 600;">${row.timestamp}</td>
+                            <td class="fw-bold text-secondary">${row.user_id}</td>
+                            <td class="text-center">${actionBadge}</td>
+                            <td>${row.action_type || '--'}</td>
+                            <td class="text-end">${sourceBadge}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                })
+                .catch(err => {
+                    console.error(err);
+                    document.getElementById('history-table-body').innerHTML = 
+                        '<tr><td colspan="5" class="text-center text-danger">Lỗi tải dữ liệu!</td></tr>';
+                });
+        }
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dự án AI & Energy System</title>
+
+  <meta name="theme-color" content="#0e0e0e"> 
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" 
+    rel="stylesheet" 
+    integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" 
+    crossorigin="anonymous"/>
+  
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/homepage.css') }}">
+</head>
+<body>
+
+  <header style="position: fixed; top: 0; left: 0; right: 0; z-index: 1000;">
+    <nav class="navbar navbar-expand-lg navbar-light bg-light" style="width: 100%;">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">A S P C</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+            <li class="nav-item">
+                <a class="nav-link" aria-current="page" href="index.html">Trang chủ</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#about">Giới thiệu</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#tech">Công nghệ</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#contact">Liên hệ</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="./login.html">Đăng nhập</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="./register.html">Đăng kí</a>
+            </li>
+          </ul>
+
+          <form class="d-flex">
+            <input class="form-control me-2" type="search" placeholder="Search" aria-label="Search">
+            <button class="btn btn-outline-success" type="submit">Search</button>
+          </form>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  
+  <section class="hero" id="home">
+    <div class="hero-content">
+      <span>AI · IOT · NĂNG LƯỢNG</span>
+      <h1>Hệ thống giám sát & điều khiển Pin năng lượng mặt trời thông minh</h1>
+      <p>
+        Ứng dụng AI kết hợp ESP32, MQTT và dữ liệu thời gian thực
+        nhằm điều khiển làm mát tự động để tối ưu hiệu suất và giảm phát thải trong hệ thống năng lượng.
+      </p>
+      <a href="#about" class="btn">Khám phá dự án</a>
+    </div>
+  </section>
+
+ 
+  <section class="hero1" id="about">
+    <div style="text-align: center;">
+    <h2>Về dự án</h2>
+  </div>
+    <p>
+      Dự án tập trung vào việc xây dựng hệ thống thu thập dữ liệu cảm biến,
+      dự đoán bằng mô hình AI và điều khiển làm mát thiết bị trong thời gian thực , dự báo hỏng hóc.
+      Giải pháp hướng tới quản lý tấm pin năng lượng mặt trời thông minh trong tương lai.
+    </p>
+
+    <div class="features">
+      <div class="feature-card">
+        <h3>Thu thập dữ liệu</h3>
+        <p>ESP32 + cảm biến nhiệt độ tấm pin, độ ẩm và nhiệt độ môi trường, ánh sáng, công suất.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Trí tuệ nhân tạo</h3>
+        <p>Dự đoán xu hướng tăng nhiệt, phát hiện bất thường và hỗ trợ ra quyết định.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Điều khiển thông minh</h3>
+        <p>Tự động bật/tắt relay, tối ưu vận hành và tiết kiệm tài nguyên.</p>
+      </div>
+    </div>
+  </section>
+
+  
+  <section class="dark" id="tech">
+    <div style="text-align: center;">
+  <h2>Công nghệ sử dụng</h2>
+</div>
+    <p>
+      Hệ thống được phát triển dựa trên các công nghệ hiện đại,
+      đảm bảo khả năng mở rộng, ổn định và phù hợp cho nghiên cứu khoa học.
+    </p>
+
+    <div class="features">
+      <div class="feature-card">
+        <h3>ESP32 & MQTT</h3>
+        <p>Giao tiếp dữ liệu thời gian thực giữa thiết bị và server.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Python & AI</h3>
+        <p>Xây dựng mô hình học máy để dự đoán và tối ưu hệ thống.</p>
+      </div>
+      <div class="feature-card">
+        <h3>Web Dashboard</h3>
+        <p>Giao diện giám sát trực quan, chuyên nghiệp và dễ mở rộng.</p>
+      </div>
+    </div>
+  </section>
+
+ 
+  <footer>
+  <div class="container">
+    <p class="mb-0">
+      © 2025 TEAM BACH KHOA SOLAR • Dự án nghiên cứu & phát triển hệ thống làm mát thông minh
+    </p>
+  </div>
+</footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" 
+    integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" 
+    crossorigin="anonymous"></script>
+
+</body>
+</html>

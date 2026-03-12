@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sức Khỏe Hệ Thống - ASPC</title>
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style_health.css') }}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js" defer></script>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg navbar-light">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="/">A S P C</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item"><a class="nav-link" href="./index.html">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link active" href="./health.html" style="color: #ffc107 !important;">Sức Khỏe</a></li>
+        <li class="nav-item"><a class="nav-link" href="./history.html">Lịch Sử</a></li>
+        <li class="nav-item"><a class="nav-link" href="./parameter.html">Thông Số</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<main class="container">
+    <h2 style="margin-top: 20px;"><i class="fas fa-heartbeat"></i> Đánh Giá Sức Khỏe Tấm Pin</h2>
+
+    <div class="section-card health-gauge">
+        <div class="progress-circle" id="health-circle">
+            <span class="health-value" id="health-percent">--%</span>
+        </div>
+        <h3>Tình Trạng: <span id="health-status" class="status-badge" style="background: gray;">Đang tải...</span></h3>
+        <p id="health-advice" style="margin-top: 10px; font-style: italic;">Đang kết nối tới AI Engine...</p>
+    </div>
+
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="icon-circle" style="color: #28a745; background: rgba(40, 167, 69, 0.1);"><i class="fas fa-bolt"></i></div>
+            <div>
+                <p class="metric-label">Công Suất Thực Tế</p>
+                <p class="metric-value" id="p-actual">-- W</p>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="icon-circle" style="color: #17a2b8; background: rgba(23, 162, 184, 0.1);"><i class="fas fa-calculator"></i></div>
+            <div>
+                <p class="metric-label">Công Suất Lý Thuyết</p>
+                <p class="metric-value" id="p-theory">-- W</p>
+                <p style="font-size: 0.8em; color: gray; margin: 0;">(Dựa trên Lux & Pmax)</p>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="icon-circle" style="color: #ffc107; background: rgba(255, 193, 7, 0.1);"><i class="fas fa-sun"></i></div>
+            <div>
+                <p class="metric-label">Cường Độ Sáng</p>
+                <p class="metric-value" id="health-lux">-- Lux</p>
+            </div>
+        </div>
+
+        <div class="metric-card">
+            <div class="icon-circle" style="color: #dc3545; background: rgba(220, 53, 69, 0.1);"><i class="fas fa-search-minus"></i></div>
+            <div>
+                <p class="metric-label">Tổn Thất Hiệu Suất</p>
+                <p class="metric-value" id="power-loss">-- %</p>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script src="{{ url_for('static', filename='js/health.js') }}"></script>
+
+</body>
+</html>
