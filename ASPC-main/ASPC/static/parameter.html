@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cài Đặt Hệ Thống | ASPC</title>
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/parameter.css') }}">
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js" defer></script>
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-dark">
+      <div class="container-fluid">
+        <a class="navbar-brand fw-bold" href="/"><i class="fas fa-solar-panel me-2"></i>A S P C</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navContent">
+          <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+            <li class="nav-item"><a class="nav-link" href="./index.html">Dashboard</a></li>
+            <li class="nav-item"><a class="nav-link" href="./history.html">Lịch Sử</a></li>
+            <li class="nav-item"><a class="nav-link active" href="#">Cài Đặt</a></li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8 col-md-10">
+                
+                <div class="glass-card fade-in-up">
+                    <div class="card-header-custom text-center mb-4">
+                        <h2><i class="fas fa-sliders-h"></i> Cấu Hình Hệ Thống</h2>
+                        <p class="text-muted">Điều chỉnh thông số kỹ thuật và kinh tế để tối ưu hóa AI</p>
+                    </div>
+
+                    <form id="paramForm">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <div class="section-box h-100">
+                                    <h5 class="section-title text-primary"><i class="fas fa-microchip"></i> Thông Số Kỹ Thuật</h5>
+                                    
+                                    <div class="mb-3">
+                                        <label for="p_max" class="form-label">Công Suất Danh Định (Pmax)</label>
+                                        <div class="input-group">
+                                            <input type="number" class="form-control" id="p_max" step="0.1" placeholder="VD: 450" required>
+                                            <span class="input-group-text">W</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="area" class="form-label">Diện Tích Tấm Pin</label>
+                                        <div class="input-group">
+                                            <input type="number" class="form-control" id="area" step="0.01" placeholder="VD: 2.1" required>
+                                            <span class="input-group-text">m²</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="alpha_p" class="form-label">Hệ Số Nhiệt Độ (α)</label>
+                                        <div class="input-group">
+                                            <input type="number" class="form-control" id="alpha_p" value="0.4" step="0.01">
+                                            <span class="input-group-text">%/°C</span>
+                                        </div>
+                                        <div class="form-text text-muted">Mặc định: 0.4%</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="section-box h-100">
+                                    <h5 class="section-title text-success"><i class="fas fa-coins"></i> Thông Số Kinh Tế</h5>
+                                    
+                                    <div class="mb-3">
+                                        <label for="p_pump" class="form-label">Công Suất Bơm</label>
+                                        <div class="input-group">
+                                            <input type="number" class="form-control" id="p_pump" placeholder="VD: 25" required>
+                                            <span class="input-group-text">W</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="monthly_kwh" class="form-label">Tiêu Thụ Điện Tháng</label>
+                                        <div class="input-group">
+                                            <input type="number" class="form-control" id="monthly_kwh" placeholder="VD: 350" required>
+                                            <span class="input-group-text">kWh</span>
+                                        </div>
+                                        <div class="form-text text-danger small">
+                                            <i class="fas fa-info-circle"></i> Hệ thống tự tra giá bậc thang EVN.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 pt-3 border-top text-center">
+                            <button type="submit" class="btn btn-save btn-lg px-5">
+                                <i class="fas fa-save me-2"></i> LƯU CẤU HÌNH
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/parameter.js') }}"></script>
+</body>
+</html>

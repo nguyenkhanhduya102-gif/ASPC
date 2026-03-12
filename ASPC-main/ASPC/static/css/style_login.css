@@ -1,0 +1,17 @@
+body {
+  /* 1. Chỉ định đường dẫn đến ảnh nền */
+  background-image: url('https://png.pngtree.com/background/20211215/original/pngtree-light-blue-flowing-distorted-gradient-tiled-seamless-background-picture-image_1456671.jpg');
+
+  /* 2. Đảm bảo ảnh nền bao phủ toàn bộ khu vực hiển thị */
+  background-size: cover;
+
+  /* 3. Ngăn ảnh bị lặp lại (nếu kích thước ảnh nhỏ hơn màn hình) */
+  background-repeat: no-repeat;
+
+  /* 4. Giữ ảnh nền cố định khi cuộn trang */
+  background-attachment: fixed;
+
+  /* 5. Đặt vị trí ảnh nền (ví dụ: căn giữa) */
+  background-position: center center;
+}
+

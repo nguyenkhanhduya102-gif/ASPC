@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trang Quản Lý Hệ Thống Phun Nước</title>
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style_index.css') }}">
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js" defer></script>
+    
+    <style>
+        @keyframes slideDown { from {top: -100px;} to {top: 20px;} }
+        /* CSS bổ sung để 3 nút chọn chế độ trông đẹp trên giao diện cũ */
+        .mode-btn-group .btn-check:checked + .btn {
+            font-weight: bold;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+<div id="system-alert-box" class="alert" role="alert" style="display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: 80%; max-width: 600px; z-index: 9999;"></div>
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 20px;">
+        <div style="display: flex; align-items: center;">
+            <i id="alert-icon" class="fas fa-exclamation-triangle" style="font-size: 24px; margin-right: 15px;"></i>
+            <span id="alert-message" style="font-size: 16px; font-weight: bold;">Thông báo hệ thống...</span>
+        </div>
+        <button onclick="document.getElementById('system-alert-box').style.display='none'" style="background:none; border:none; color:inherit; font-size:20px; cursor:pointer;">&times;</button>
+    </div>
+</div>
+
+<nav class="navbar navbar-expand-lg navbar-light bg-light">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="/">A S P C</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarSupportedContent">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item"><a class="nav-link active" href="./index.html">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link" href="./history.html">Lịch Sử</a></li>
+        <li class="nav-item"><a class="nav-link" href="./parameter.html">Thông Số</a></li>
+        <li class="nav-item"><a class="nav-link" href="./health.html">Sức Khỏe</a></li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<main class="container pt-4">
+
+    <div id="settings-screen" class="section-card hidden" style="display:none; margin-bottom: 20px;">
+        <h2><i class="fas fa-cogs"></i> Cài Đặt Kết Nối</h2>
+        <div class="auth-form" style="box-shadow: none; margin: 0; padding: 0;">
+            <label class="metric-label">ID Người dùng:</label>
+            <input type="text" id="settings-user-id" class="form-control mb-2" placeholder="user_001">
+            <label class="metric-label">ID Thiết bị:</label>
+            <input type="text" id="settings-device-id" class="form-control mb-3" placeholder="device_A">
+            <button onclick="saveSettings()" class="btn btn-primary w-100"><i class="fas fa-save"></i> Lưu & Kết nối lại</button>
+        </div>
+    </div>
+
+    <div id="dashboard-screen"> 
+        <div style="text-align: center" class="status-indicator mb-3">
+            <span id="mqtt-status-dot" class="status-dot disconnected"></span>
+            Trạng thái Server: <span id="mqtt-status-text">Ngắt kết nối</span>
+        </div>
+
+        <section class="data-display section-card mb-4">
+            <h2><i class="fas fa-thermometer-three-quarters"></i> Dữ Liệu Hiện Tại</h2>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="icon-circle"><i class="fas fa-temperature-low"></i></div>
+                    <div>
+                        <p class="metric-label">Nhiệt Độ Môi Trường</p>
+                        <p class="metric-value" id="current-temp">-- °C</p>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="icon-circle" style="color: #17a2b8; background-color: rgba(23, 162, 184, 0.1);"><i class="fas fa-water"></i></div>
+                    <div>
+                        <p class="metric-label">Độ Ẩm Môi Trường</p>
+                        <p class="metric-value" id="humidity">-- %</p>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="icon-circle" style="color: #ffc107; background-color: rgba(255, 193, 7, 0.1);"><i class="fas fa-sun"></i></div>
+                    <div>
+                        <p class="metric-label">Cường Độ Ánh Sáng</p>
+                        <p class="metric-value" id="light-intensity">-- Lux</p>
+                    </div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="icon-circle" style="color: #ff9800; background-color: rgba(255, 152, 0, 0.1);"><i class="fas fa-solar-panel"></i></div>
+                    <div>
+                        <p class="metric-label">Nhiệt Độ Tấm Pin</p>
+                        <p class="metric-value" id="solar-temp">-- °C</p>
+                    </div>
+                </div>
+
+                <div class="metric-card big-metric-card">
+                    <div class="icon-circle" style="color: #dc3545; background-color: rgba(220, 53, 69, 0.1);"><i class="fas fa-chart-bar"></i></div>
+                    <div>
+                        <p class="metric-label">Tốc Độ Tăng Nhiệt</p>
+                        <p class="metric-value" id="temp-rate">-- °C/s</p>
+                    </div>
+                </div>
+
+                <div class="metric-card big-metric-card">
+                    <div class="icon-circle" style="color:#28a745; background-color: rgba(40, 167, 69, 0.1);"><i class="fas fa-leaf"></i></div> 
+                    <div>
+                        <p class="metric-label">Hiệu Suất / Sức Khỏe</p>
+                        <p class="metric-value" id="efficiency">--%</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <section class="section-card mb-4" style="border-top: 4px solid #28a745; background: #f1f8e9;">
+            <h2 style="color: #2e7d32; font-size: 1.4em; border-bottom: none; margin-bottom: 15px;">
+                <i class="fas fa-seedling"></i> Hiệu Quả Hôm Nay
+            </h2>
+            <div class="row text-center align-items-center">
+                <div class="col-md-4 mb-3 mb-md-0 border-end">
+                    <div class="text-muted text-uppercase small fw-bold">Sản lượng tăng thêm</div>
+                    <div id="eff-gain-kwh" class="display-6 fw-bold text-success">0.000 <span class="fs-6">kWh</span></div>
+                    <small class="text-secondary fst-italic">(So với không làm mát)</small>
+                </div>
+                
+                <div class="col-md-4 mb-3 mb-md-0 border-end">
+                    <div class="text-muted text-uppercase small fw-bold">Tiền tiết kiệm được</div>
+                    <div id="eff-save-vnd" class="display-6 fw-bold text-primary">0 đ</div>
+                    <small class="text-secondary fst-italic">Tự động theo giá điện bậc thang</small>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="text-muted text-uppercase small fw-bold">Tăng trưởng tháng này</div>
+                    <div id="eff-percent-month" class="display-6 fw-bold text-warning">+0%</div>
+                    <div class="progress mt-2" style="height: 6px; width: 60%; margin: 0 auto; background-color: #e0e0e0;">
+                        <div id="eff-progress-bar" class="progress-bar bg-warning" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <div class="card mb-4 shadow-sm">
+            <div class="card-body d-flex flex-column align-items-center">
+                <h5 class="mb-3"><i class="fas fa-gamepad"></i> Chế Độ Điều Khiển</h5>
+                
+                <div class="btn-group w-100 mode-btn-group" role="group">
+                    <input type="radio" class="btn-check" name="sys_mode" id="mode_manual" autocomplete="off" checked>
+                    <label class="btn btn-outline-secondary" for="mode_manual">Thủ Công</label>
+
+                    <input type="radio" class="btn-check" name="sys_mode" id="mode_auto" autocomplete="off">
+                    <label class="btn btn-outline-warning" for="mode_auto">Tự Động</label>
+
+                    <input type="radio" class="btn-check" name="sys_mode" id="mode_smart" autocomplete="off">
+                    <label class="btn btn-outline-success" for="mode_smart">Smart Eco (AI)</label>
+                </div>
+                <small class="text-muted mt-2" id="mode-desc">Bạn toàn quyền điều khiển.</small>
+                
+                <div id="economic-stats" style="display: none; margin-top: 15px; width: 100%; padding: 10px; background: #e8f5e9; border-radius: 10px; border: 1px solid #c3e6cb;">
+                    <div class="row text-center">
+                        <div class="col-6">Lãi: <strong class="text-success" id="eco-profit">0 đ</strong></div>
+                        <div class="col-6">Tiết kiệm: <strong class="text-primary" id="eco-energy">0 Wh</strong></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-container" style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
+            
+            <section class="control-panel section-card" style="flex:1; border: 1px solid #ddd; padding: 20px; border-radius: 10px; background: #fff;">
+                <h2 style="margin-top: 0; color: #d35400;"><i class="fas fa-thermometer-high"></i> Phun Làm Mát</h2>
+                
+                <div style="background: #fff5f5; border-left: 4px solid #ff4d4d; padding: 10px; margin-bottom: 15px;">
+                    <p style="margin: 0; color: #c0392b; font-weight: bold;">
+                        <i class="fas fa-exclamation-triangle"></i> Cảnh báo nhiệt độ cao
+                    </p>
+                </div>
+
+                <div class="control-actions">
+                    <button id="stop-cool-btn" class="btn btn-secondary w-100 mb-2" disabled>DỪNG PHUN</button>
+                    <button id="btn-cool-on" class="alert-btn high" style="width: 100%; background: forestgreen; color: white; border: none; padding: 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">
+                        KÍCH HOẠT PHUN LÀM MÁT
+                    </button>
+                    
+                    <p id="auto-cool-msg" style="color: #e67e22; font-weight: bold; text-align: center; margin-top: 10px; display: none;">
+                        <i class="fas fa-robot"></i> AI đang điều khiển...
+                    </p>
+                    <p class="alert-status" id="cool-status" style="margin-top: 15px; text-align: center; font-style: italic; color: #7f8c8d;">
+                        Trạng thái: **Không Phun**
+                    </p>
+                </div>
+            </section>
+
+            <section class="control-panel section-card" style="flex:1; border: 1px solid #ddd; padding: 20px; border-radius: 10px; background: #fff;">
+                <h2 style="margin-top: 0; color: #2980b9;"><i class="fas fa-broom"></i> Phun Làm Sạch</h2>
+                
+                <div style="background: #e1f5fe; border-left: 4px solid #0288d1; padding: 10px; margin-bottom: 15px;">
+                    <p style="margin: 0; color: #01579b; font-weight: bold;">
+                        <i class="fas fa-wind"></i> Bụi bẩn: <span id="dust-level">--</span>%
+                    </p>
+                </div>
+
+                <div class="control-actions">
+                    <button id="stop-clean-btn" class="btn btn-secondary w-100 mb-2" disabled>DỪNG PHUN</button>
+                    <button id="btn-clean-on" class="alert-btn high" style="width: 100%; background: forestgreen; color: white; border: none; padding: 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">
+                        KÍCH HOẠT PHUN LÀM SẠCH
+                    </button>
+                    
+                    <p id="auto-clean-msg" style="color: #0288d1; font-weight: bold; text-align: center; margin-top: 10px; display: none;">
+                        <i class="fas fa-robot"></i> Hệ thống đang làm sạch...
+                    </p>
+                    <p class="alert-status" id="clean-status" style="margin-top: 15px; text-align: center; font-style: italic; color: #7f8c8d;">
+                        Trạng thái: **Không Phun**
+                    </p>
+                </div>
+            </section>
+        </div>
+
+        <section class="chart-section section-card mt-4">
+            <h2><i class="fas fa-chart-area"></i> Biểu Đồ Nhiệt Độ</h2>
+            <div class="chart-container">
+                <canvas id="temperatureChart"></canvas>
+            </div>
+        </section> 
+    </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script src="{{ url_for('static', filename='js/index.js') }}"></script>
+
+</body>
+</html>

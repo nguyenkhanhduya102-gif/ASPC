@@ -50,8 +50,3 @@ ehthumbs.db
 # === LOGS ===
 *.log
 logs/
-.history/
-*.xml
-.bash_history
-.gitconfig
-.lesshst

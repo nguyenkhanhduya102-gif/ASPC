@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=0.1"/>
+        <title>Đăng Kí</title>
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/style_register.css') }}">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" 
+    rel="stylesheet" 
+    integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" 
+    crossorigin="anonymous"/>
+    </head>
+
+
+    <body>
+
+        <div 
+        style="height:100vh"
+        class="container d-flex justify-content-center align-items-center"  >
+            <form id="formRegister" style="width:400px">
+                <h3 class="text-center">Đăng kí tài khoản</h3>
+
+        <div class="mb-3">
+           <label for="userName" class="form-label">
+            Họ và tên</label>
+           <input 
+           type="text" 
+           class="form-control" 
+           id="userName" 
+           placeholder="Nhập họ và tên">
+        </div>
+        <div id="userNameError" style="color:red ; display:none" >Tên không được để trống</div>
+
+        <div class="mb-3">
+           <label for="email" class="form-label">
+            Email</label>
+           <input 
+           type="text" 
+           class="form-control" 
+           id="email" 
+           placeholder="Nhập Email">
+        </div>
+        <div id="EmailError" style="color:red ; display:none">Email không được để trống</div>
+
+        <div class="mb-3">
+           <label for="password" class="form-label">
+            Mật Khẩu</label>
+           <input 
+           type="text" 
+           class="form-control" 
+           id="password" 
+           placeholder="Nhập Mật Khẩu">
+        </div>
+        <div id="passwordError" style="color:red ; display:none ">Mật khẩu không được để trống</div>
+
+        
+        <div class="mb-3">
+           <label for="rePpassword" class="form-label">
+            Nhập Lại Mật Khẩu</label>
+           <input 
+           type="text" 
+           class="form-control" 
+           id="rePpassword" 
+           placeholder="Nhập Lại Mật Khẩu">
+        </div>
+        <div id="rePpasswordError" style="color:red ; display:none"> Không được để trống</div>
+
+        <div class="mb-3">
+          <label for="address" 
+          class="form-label">Địa chỉ</label>
+          <textarea 
+          class="form-control" 
+          id="address" 
+          rows="3"></textarea>
+        </div>
+        <div>
+            <button type="submit" style="width:100%" class="btn btn-primary">Đăng kí</button>
+        </div>
+        <p class="text-center mt-2">
+            Bạn đã có tài khoản? <a href="./login.html">Đăng Nhập</a>
+        </p>
+         </form>
+        </div>
+
+        <!--Script start-->
+
+        <script src="{{ url_for('static', filename='js/register.js') }}"></script>
+        
+        <!--Script end-->
+
+
+    </body>
+</html>
