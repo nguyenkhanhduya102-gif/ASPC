@@ -1,0 +1,83 @@
+.weather-summary {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+}
+
+.weather-pill {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+}
+
+.weather-pill .label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #6c757d;
+  margin-bottom: 4px;
+}
+
+.weather-pill .value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #212529;
+  word-break: break-word;
+}
+
+@media (max-width: 1200px) {
+  .weather-summary { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 768px) {
+  .weather-summary { grid-template-columns: repeat(2, 1fr); }
+}
+
+.navbar {
+     background-color: #000000 !important;/* Đen hoàn toàn như ảnh mẫu */
+    height: 72px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05); /* Viền cực mảnh */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+
+
+/*chỉnh màu đen cho thanh điều hướng */
+.navbar.bg-dark {
+    background-color: #000000 !important; /* Đen 100% */
+    height: 72px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05); /* Viền cực mảnh cho sang */
+}
+
+
+
+/* Logo Brand */
+.navbar-brand {
+    color: #ffffff !important;
+    font-size: 28px !important;
+    letter-spacing: 2px; /* Tạo khoảng cách chữ cho sang trọng */
+    font-weight: 900 !important;
+}
+/* Màu chữ các liên kết */
+.navbar-nav .nav-link {
+    color: #ffffff !important; /* Chữ trắng rõ nét */
+    font-size: 16px;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+    opacity: 0.8;
+}
+
+.navbar-nav .nav-link:hover, 
+.navbar-nav .nav-link.active {
+    opacity: 1;
+    color: #ffffff !important;
+    /* Nếu muốn có gạch chân nhỏ khi hover như các web hiện đại */
+    border-bottom: 2px solid var(--accent-color); 
+}
+
+/* Đảm bảo nội dung trang không bị navbar đè lên */
+body {
+    padding-top: 72px; 
+}

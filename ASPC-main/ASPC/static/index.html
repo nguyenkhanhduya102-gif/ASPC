@@ -12,7 +12,7 @@
     
     <style>
         @keyframes slideDown { from {top: -100px;} to {top: 20px;} }
-        /* CSS bổ sung để 3 nút chọn chế độ trông đẹp trên giao diện cũ */
+        
         .mode-btn-group .btn-check:checked + .btn {
             font-weight: bold;
             box-shadow: 0 0 10px rgba(0,0,0,0.2);
@@ -29,8 +29,8 @@
         <button onclick="document.getElementById('system-alert-box').style.display='none'" style="background:none; border:none; color:inherit; font-size:20px; cursor:pointer;">&times;</button>
     </div>
 </div>
-
-<nav class="navbar navbar-expand-lg navbar-light bg-light">
+<!--Thanh navba-->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
   <div class="container-fluid">
     <a class="navbar-brand" href="/">A S P C</a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent">
@@ -42,12 +42,17 @@
         <li class="nav-item"><a class="nav-link" href="./history.html">Lịch Sử</a></li>
         <li class="nav-item"><a class="nav-link" href="./parameter.html">Thông Số</a></li>
         <li class="nav-item"><a class="nav-link" href="./health.html">Sức Khỏe</a></li>
+        <li class="nav-item">
+    <a class="nav-link" href="./weather.html">Thời tiết</a>
+  </li>
       </ul>
     </div>
   </div>
 </nav>
+<!--Thanh nacbav-->
 
-<main class="container pt-4">
+<!--Cấu hình-->
+<main class="container pt-5 mt-5">
 
     <div id="settings-screen" class="section-card hidden" style="display:none; margin-bottom: 20px;">
         <h2><i class="fas fa-cogs"></i> Cài Đặt Kết Nối</h2>
@@ -59,7 +64,9 @@
             <button onclick="saveSettings()" class="btn btn-primary w-100"><i class="fas fa-save"></i> Lưu & Kết nối lại</button>
         </div>
     </div>
+<!--Cấu hình-->
 
+<!--Dashboard-->
     <div id="dashboard-screen"> 
         <div style="text-align: center" class="status-indicator mb-3">
             <span id="mqtt-status-dot" class="status-dot disconnected"></span>
@@ -118,6 +125,9 @@
                 </div>
             </div>
         </section>
+<!--Dashboard-->
+
+<!---->
         <section class="section-card mb-4" style="border-top: 4px solid #28a745; background: #f1f8e9;">
             <h2 style="color: #2e7d32; font-size: 1.4em; border-bottom: none; margin-bottom: 15px;">
                 <i class="fas fa-seedling"></i> Hiệu Quả Hôm Nay
@@ -144,6 +154,7 @@
                 </div>
             </div>
         </section>
+<!---->
         <div class="card mb-4 shadow-sm">
             <div class="card-body d-flex flex-column align-items-center">
                 <h5 class="mb-3"><i class="fas fa-gamepad"></i> Chế Độ Điều Khiển</h5>

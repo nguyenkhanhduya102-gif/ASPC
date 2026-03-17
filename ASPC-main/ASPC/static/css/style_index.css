@@ -23,6 +23,14 @@
     --radius-sm: 4px;
     --radius-md: 10px;           /* Bo góc bạn chọn rất hiện đại */
     --shadow-soft: 0 4px 6px rgba(0, 0, 0, 0.05);
+
+    /* === Backward-compat variables (đang được dùng rải rác) === */
+    --secondary-color: var(--success-color);
+    --navbar-accent: var(--accent-color);
+    --bg-color: var(--bg-body);
+    --text-dark: var(--text-main);
+    --text-light: var(--text-muted);
+    --border-radius: var(--radius-md);
 }
 
 body {
@@ -34,6 +42,7 @@ body {
     background-color: var(--bg-color); 
     
     /* Chỉnh lại body background-image */
+    padding-top: 72px;
     background-image: url('../images/pic3.jpg');
     background-size: cover;
     background-repeat: no-repeat;
@@ -61,46 +70,47 @@ h2 {
 h2 i { margin-right: 10px; color: var(--secondary-color); }
 .hidden { display: none !important; }
 
-/*  GHI ĐÈ NAVBAR BOOTSTRAP (MÀU XANH ĐẬM)  */
 
-/* 1. Ghi đè nền tối, hiệu ứng mờ và chiều cao */
-.navbar-light {
-    
-    background-color: #343a40 !important; 
-    border-bottom: 1px solid rgba(255,255,255,0.1); 
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-    padding-top: 0; 
-    padding-bottom: 0;
-    height: 72px; 
+/* Cố định chiều cao và nền cho navbar */
+.navbar {
+     background-color: #000000 !important;/* Đen hoàn toàn như ảnh mẫu */
+    height: 72px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05); /* Viền cực mảnh */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+.navbar.bg-dark {
+    background-color: #000000 !important; /* Đen 100% */
+    height: 72px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05); /* Viền cực mảnh cho sang */
 }
 
-/* 2. Ghi đè màu chữ Logo Brand */
+/* Logo Brand */
 .navbar-brand {
-    color: #ffffff !important; /* Trắng */
-    font-size: 24px !important;
-    font-weight: 700 !important;
+    color: #ffffff !important;
+    font-size: 28px !important;
+    letter-spacing: 2px; /* Tạo khoảng cách chữ cho sang trọng */
+    font-weight: 900 !important;
 }
-
-/* 3. Ghi đè màu chữ Link (Bình thường và Hover) */
+/* Màu chữ các liên kết */
 .navbar-nav .nav-link {
-    color: #e0e0e0 !important; /* Trắng nhạt */
-    font-size: 15px;
-    font-weight: 500;
-    transition: color 0.3s;
+    color: #ffffff !important; /* Chữ trắng rõ nét */
+    font-size: 16px;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+    opacity: 0.8;
 }
 
-.navbar-nav .nav-link:hover, .navbar-nav .nav-link.active {
-    color: var(--navbar-accent) !important; /* Vàng đồng Accent */
+.navbar-nav .nav-link:hover, 
+.navbar-nav .nav-link.active {
+    opacity: 1;
+    color: #ffffff !important;
+    /* Nếu muốn có gạch chân nhỏ khi hover như các web hiện đại */
+    border-bottom: 2px solid var(--accent-color); 
 }
 
-/* 4. Ghi đè màu của nút Toggle Menu (cho thiết bị di động) */
-.navbar-toggler {
-    border-color: rgba(255,255,255,0.15) !important;
-}
-
-.navbar-toggler-icon {
-    /* Đảo màu icon toggle sang trắng trên nền tối */
-    filter: invert(1);
+/* Đảm bảo nội dung trang không bị navbar đè lên */
+body {
+    padding-top: 72px; 
 }
 
 /* 5. Ghi đè màu của Form Search (để phù hợp với nền tối) */

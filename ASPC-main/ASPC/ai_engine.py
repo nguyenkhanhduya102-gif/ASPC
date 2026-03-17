@@ -8,7 +8,7 @@ from tensorflow.keras.layers import LSTM, Dense, Input, Dropout
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.losses import Huber
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score # [MỚI] Thư viện chấm điểm
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score 
 
 class SolarLSTM:
     def __init__(self, model_path='model_multivariate.h5', data_file='solar_data_multi.csv', scaler_file='scaler.pkl'):
@@ -20,7 +20,7 @@ class SolarLSTM:
         self.scaler = None
         
         # --- CẤU HÌNH TỐI ƯU ---
-        # [MẸO 1] Tăng Window Size lên 30 (nhìn lại 2.5 phút) để thấy rõ xu hướng hơn
+        
         self.window_size = 30 
         
         self.num_features = 5 
@@ -80,14 +80,14 @@ class SolarLSTM:
             df.to_csv(self.data_file, mode='a', header=header, index=False)
         except: pass
 
-    # [MỚI] Hàm chuyên dụng để chấm điểm mô hình
+    
     def evaluate_model(self, X_test, y_test):
         try:
             # 1. Dự báo thử trên tập Test
             y_pred_scaled = self.model.predict(X_test, verbose=0)
             
             # 2. Giải nén (Inverse Scale) để ra nhiệt độ thật (Độ C)
-            # Vì scaler đang scale cả 5 cột, ta phải tạo mảng giả để inverse
+            
             dummy_pred = np.zeros((len(y_pred_scaled), self.num_features))
             dummy_test = np.zeros((len(y_test), self.num_features))
             
@@ -103,9 +103,9 @@ class SolarLSTM:
             r2 = r2_score(real_test, real_pred)
             
             self.last_metrics = {
-                "mae": round(mae, 3),   # Sai số trung bình (Độ C)
-                "rmse": round(rmse, 3), # Sai số bình phương
-                "r2": round(r2, 3)      # Độ khớp (Càng gần 1 càng tốt)
+                "mae": round(mae, 3),   
+                "rmse": round(rmse, 3), 
+                "r2": round(r2, 3)      
             }
             
             print(f"📊 ĐÁNH GIÁ: Sai số MAE = {mae:.2f}°C | R2 Score = {r2:.2f}")
@@ -138,7 +138,7 @@ class SolarLSTM:
                 
             X, y = np.array(X), np.array(y)
 
-            # [QUAN TRỌNG] Chia tập Train (80%) và Test (20%)
+            
             split_idx = int(len(X) * 0.8)
             X_train, X_test = X[:split_idx], X[split_idx:]
             y_train, y_test = y[:split_idx], y[split_idx:]
@@ -154,7 +154,7 @@ class SolarLSTM:
                 self.model.add(Dense(1)) 
                 
                 # [MẸO 2] Dùng Huber Loss thay cho MSE 
-                # Huber chịu nhiễu tốt hơn (nếu cảm biến thỉnh thoảng bị gai)
+                
                 self.model.compile(optimizer='adam', loss=Huber())
             
             early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)

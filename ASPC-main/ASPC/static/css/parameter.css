@@ -1,10 +1,10 @@
-/* --- 1. CẤU HÌNH CHUNG --- */
+/* 1. CẤU HÌNH CHUNG  */
 :root {
     --primary-color: #007bff;
     --success-color: #28a745;
     --bg-overlay: rgba(0, 0, 0, 0.4); /* Lớp phủ tối đè lên ảnh nền */
     --card-bg: rgba(255, 255, 255, 0.96); /* Nền thẻ trắng đục 96% */
-    --text-main: #2c3e50; /* Chữ màu xám đậm (Rất dễ đọc) */
+    --text-main: #2c3e50; /* Chữ màu xám đậm  */
     --text-muted: #6c757d;
 }
 
@@ -29,11 +29,50 @@ body::before {
 
 /* --- 2. NAVBAR (Giữ màu tối cho Navbar) --- */
 .navbar {
-    background: #111 !important; /* Đen hoàn toàn */
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+     background-color: #000000 !important;/* Đen hoàn toàn như ảnh mẫu */
+    height: 72px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05); /* Viền cực mảnh */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
-.navbar-brand, .nav-link {
-    color: #fff !important; /* Chữ trên menu vẫn là trắng */
+
+
+
+/*chỉnh màu đen cho thanh điều hướng */
+.navbar.bg-dark {
+    background-color: #000000 !important; /* Đen 100% */
+    height: 72px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05); /* Viền cực mảnh cho sang */
+}
+
+
+
+/* Logo Brand */
+.navbar-brand {
+    color: #ffffff !important;
+    font-size: 28px !important;
+    letter-spacing: 2px; /* Tạo khoảng cách chữ cho sang trọng */
+    font-weight: 900 !important;
+}
+/* Màu chữ các liên kết */
+.navbar-nav .nav-link {
+    color: #ffffff !important; /* Chữ trắng rõ nét */
+    font-size: 16px;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+    opacity: 0.8;
+}
+
+.navbar-nav .nav-link:hover, 
+.navbar-nav .nav-link.active {
+    opacity: 1;
+    color: #ffffff !important;
+    /* Nếu muốn có gạch chân nhỏ khi hover như các web hiện đại */
+    border-bottom: 2px solid var(--accent-color); 
+}
+
+/* Đảm bảo nội dung trang không bị navbar đè lên */
+body {
+    padding-top: 72px; 
 }
 
 /* --- 3. THẺ CARD CHÍNH (QUAN TRỌNG NHẤT) --- */
@@ -48,7 +87,7 @@ body::before {
 }
 
 /* --- 4. CHỈNH MÀU CHỮ TRONG THẺ --- */
-/* Ép buộc tất cả chữ trong thẻ thành màu tối */
+
 .glass-card h2, 
 .glass-card h5, 
 .glass-card label, 

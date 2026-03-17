@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cài Đặt Hệ Thống | ASPC</title>
     
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style_index.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/parameter.css') }}">
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" />
@@ -12,17 +13,19 @@
 </head>
 <body>
 
-    <nav class="navbar navbar-expand-lg navbar-dark">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
       <div class="container-fluid">
-        <a class="navbar-brand fw-bold" href="/"><i class="fas fa-solar-panel me-2"></i>A S P C</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
+        <a class="navbar-brand" href="/">A S P C</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent">
           <span class="navbar-toggler-icon"></span>
         </button>
-        <div class="collapse navbar-collapse" id="navContent">
-          <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
             <li class="nav-item"><a class="nav-link" href="./index.html">Dashboard</a></li>
             <li class="nav-item"><a class="nav-link" href="./history.html">Lịch Sử</a></li>
-            <li class="nav-item"><a class="nav-link active" href="#">Cài Đặt</a></li>
+            <li class="nav-item"><a class="nav-link active" href="./parameter.html">Thông Số</a></li>
+            <li class="nav-item"><a class="nav-link" href="./health.html">Sức Khỏe</a></li>
+            <li class="nav-item"><a class="nav-link" href="./weather.html">Thời tiết</a></li>
           </ul>
         </div>
       </div>

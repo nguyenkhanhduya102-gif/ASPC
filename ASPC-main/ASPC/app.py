@@ -5,11 +5,25 @@ import threading
 import ssl
 import math
 import os
+import socket
+import sys
 import time
 from dotenv import load_dotenv
+import requests
 
-# Load biến môi trường từ file .env
-load_dotenv()
+# Load biến môi trường từ file .env (cố định theo thư mục file này)
+try:
+    _dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
+    load_dotenv(dotenv_path=_dotenv_path)
+except Exception:
+    load_dotenv()
+
+# Tránh crash UnicodeEncodeError trên Windows console (cp1258/cp1252...)
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
 import random 
 from flask import request, jsonify
 from collections import deque
@@ -20,7 +34,6 @@ from ai_engine import SolarLSTM
 from health_engine import SolarHealthEngine
 from optimizer import SolarOptimizer
 
-# --- CẤU HÌNH ---
 DB_NAME = "aspc_history.db"
 SIMULATION_MODE = os.getenv("SIMULATION_MODE", "False").lower() == "true"
 # MQTT CẤU HÌNH KẾT NỐI (đọc từ biến môi trường)
@@ -35,6 +48,10 @@ K_FACTOR = 0.00015
 TEMP_COEFF = 0.0045
 TEMP_STD = 25.0
 
+WEATHER_API_KEY = os.getenv("WEATHER_API_KEY", "")
+WEATHER_LAT = os.getenv("WEATHER_LAT", "")
+WEATHER_LON = os.getenv("WEATHER_LON", "")
+WEATHER_UNITS = os.getenv("WEATHER_UNITS", "metric")
 # --- CẤU HÌNH CẢNH BÁO ---
 TEMP_THRESHOLD_HIGH = 40
 TEMP_THRESHOLD_SAFE = 35
@@ -51,7 +68,7 @@ system_state = {
     "last_advice_on_time": 0, 
     "last_advice_off_time": 0
 }
-# --- BIẾN TÍCH LŨY NĂNG LƯỢNG ---
+# BIẾN TÍCH LŨY NĂNG LƯỢNG
 energy_state = {
     "E_real_today": 0.0,
     "E_no_cool_today": 0.0,
@@ -62,9 +79,32 @@ energy_state = {
 }
 app = Flask(__name__, static_folder='static', template_folder='static')
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default-secret-key-please-change')
-socketio = SocketIO(app, cors_allowed_origins="*")
+# Windows-friendly: tránh phụ thuộc eventlet/gevent gây lỗi khó đoán
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
-# --- DATABASE & AI (GIỮ NGUYÊN) ---
+
+def _find_free_port(host: str, start_port: int, max_tries: int = 30) -> int:
+    """
+    Tránh WinError 10048 khi port đang bị chiếm.
+    Thử start_port, nếu bận thì tăng dần cho tới khi bind được.
+    """
+    port = int(start_port)
+    for _ in range(max_tries):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind((host, port))
+            return port
+        except OSError:
+            port += 1
+        finally:
+            try:
+                s.close()
+            except Exception:
+                pass
+    return int(start_port)
+
+# DATABASE & AI (GIỮ NGUYÊN)
 def init_db():
     try:
         conn = sqlite3.connect(DB_NAME)
@@ -84,7 +124,88 @@ health_brain = SolarHealthEngine()
 print("💰 Đang khởi tạo Optimizer Engine...")
 optimizer_brain = SolarOptimizer()
 
-# --- [MỚI] QUẢN LÝ NĂNG LƯỢNG & HIỆU QUẢ ---
+class WeatherCache:
+    def __init__(self, ttl_seconds: int = 600):
+        self.ttl_seconds = ttl_seconds
+        self._last_fetch_ts = 0.0
+        self._last_payload = None
+
+    def get(self):
+        return self._last_payload
+
+    def is_stale(self):
+        return (time.time() - self._last_fetch_ts) > self.ttl_seconds
+
+    def set(self, payload):
+        self._last_payload = payload
+        self._last_fetch_ts = time.time()
+
+
+weather_cache = WeatherCache(ttl_seconds=int(os.getenv("WEATHER_CACHE_TTL", "600")))
+
+
+def fetch_weather_forecast():
+    """Gọi OpenWeatherMap One Call API / forecast đơn giản"""
+    if not WEATHER_API_KEY or not WEATHER_LAT or not WEATHER_LON:
+        return None
+
+    url = (
+        "https://api.openweathermap.org/data/2.5/forecast"
+        f"?lat={WEATHER_LAT}&lon={WEATHER_LON}&units={WEATHER_UNITS}&appid={WEATHER_API_KEY}"
+    )
+
+    try:
+        resp = requests.get(url, timeout=5)
+        resp.raise_for_status()
+        data = resp.json()
+
+        # Lấy thông tin gọn: dự báo vài mốc đầu
+        simplified = []
+        rain_soon = False
+        rain_reason = None
+
+        for item in data.get("list", [])[:8]:  # khoảng 24h tới (3h x 8)
+            w0 = (item.get("weather") or [{}])[0] or {}
+            main = (w0.get("main") or "").lower()
+            desc = (w0.get("description") or "").lower()
+            has_rain_volume = "rain" in item  # OpenWeather trả 'rain': {'3h': ...} khi có mưa
+            is_rain = ("rain" in main) or ("rain" in desc) or has_rain_volume
+            if is_rain and not rain_soon:
+                rain_soon = True
+                rain_reason = item.get("dt_txt") or "soon"
+
+            simplified.append({
+                "time": item["dt_txt"],
+                "temp": item["main"]["temp"],
+                "humidity": item["main"]["humidity"],
+                "clouds": item["clouds"]["all"],
+                "wind_speed": item["wind"]["speed"],
+                "weather": w0.get("description", ""),
+            })
+
+        return {
+            "location": data.get("city", {}).get("name", ""),
+            "lat": WEATHER_LAT,
+            "lon": WEATHER_LON,
+            "forecast": simplified,
+            "rain_soon": rain_soon,
+            "rain_reason": rain_reason
+        }
+    except Exception as e:
+        print(f"⚠️ Lỗi gọi API thời tiết: {e}")
+        return None
+
+
+def get_weather_cached():
+    if weather_cache.get() is None or weather_cache.is_stale():
+        payload = fetch_weather_forecast()
+        if payload is not None:
+            weather_cache.set(payload)
+        else:
+            # Nếu fetch fail thì vẫn trả cache cũ (nếu có)
+            return weather_cache.get()
+    return weather_cache.get()
+#  [MỚI] QUẢN LÝ NĂNG LƯỢNG & HIỆU QUẢ 
 class EnergyManager:
     def __init__(self):
         self.last_update_time = time.time()
@@ -196,7 +317,7 @@ class EnergyManager:
 
 # Khởi tạo Global
 energy_manager = EnergyManager()
-# --- DATABASE HELPERS ---
+# DATABASE HELPERS 
 def save_history(user, cmd, action_type, source):
     try:
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -215,7 +336,24 @@ def get_smooth_temp(raw_temp):
     temp_history.append(raw_temp)
     # Trả về trung bình cộng
     return sum(temp_history) / len(temp_history)
-# --- [LOGIC QUAN TRỌNG] KIỂM TRA & RA QUYẾT ĐỊNH ---
+
+
+def should_skip_cooling_due_to_rain():
+    """
+    Quy tắc tiết kiệm nước:
+    - Nếu dự báo thời tiết cho thấy sắp có mưa (trong ~24h tới theo API 3h-step),
+      thì không bật phun làm mát dù AI dự báo sắp quá nhiệt.
+    """
+    try:
+        wx = get_weather_cached()
+        if not wx:
+            return False, None
+        if wx.get("rain_soon"):
+            return True, wx.get("rain_reason")
+        return False, None
+    except Exception:
+        return False, None
+#  [LOGIC QUAN TRỌNG] KIỂM TRA & RA QUYẾT ĐỊNH 
 def check_system_decision(current_temp, lux, p_max, pump_status):
     global system_state
     current_time = time.time()
@@ -224,9 +362,9 @@ def check_system_decision(current_temp, lux, p_max, pump_status):
     ai_result = ai_brain.predict()
     pred_temp_basic = ai_result['pred_temp_5min'] if ai_result else current_temp
 
-    # ==========================================================
+    
     # CHẾ ĐỘ 1: SMART ECO (TỐI ƯU KINH TẾ & AN TOÀN)
-    # ==========================================================
+    
     if system_state["mode"] == "SMART_ECO":
         # A. AI Dự báo 2 kịch bản tương lai
         pred_off = ai_brain.predict_scenario(0) # Nếu Tắt bơm
@@ -248,11 +386,17 @@ def check_system_decision(current_temp, lux, p_max, pump_status):
         if should_run:
             # Nếu Optimizer bảo BẬT
             if pump_status == 0 and not system_state["is_auto_running"]:
-                print(f"💰 SMART: Bật bơm. {reason}")
-                mqtt_client.publish(TOPIC_PUB, json.dumps({"command": "2", "type": "COOL", "source": "SMART_ECO"}))
-                system_state["is_auto_running"] = True
-                socketio.emit('system_alert', {'level': 'success', 'message': f'SMART: Đã bật bơm. {reason}'})
-                save_history("SMART_ECO", "BẬT", "Tối ưu kinh tế", "SMART_ECO")
+                skip, rain_reason = should_skip_cooling_due_to_rain()
+                if skip:
+                    msg = f"SMART: AI đề xuất làm mát nhưng dự báo sắp mưa ({rain_reason}). Tạm không phun để tiết kiệm."
+                    print(f"🌧️ {msg}")
+                    socketio.emit('system_alert', {'level': 'info', 'message': msg})
+                else:
+                    print(f"💰 SMART: Bật bơm. {reason}")
+                    mqtt_client.publish(TOPIC_PUB, json.dumps({"command": "2", "type": "COOL", "source": "SMART_ECO"}))
+                    system_state["is_auto_running"] = True
+                    socketio.emit('system_alert', {'level': 'success', 'message': f'SMART: Đã bật bơm. {reason}'})
+                    save_history("SMART_ECO", "BẬT", "Tối ưu kinh tế", "SMART_ECO")
         else:
             # Nếu Optimizer bảo TẮT (Vì lỗ tiền)
             if system_state["is_auto_running"]:
@@ -284,9 +428,9 @@ def check_system_decision(current_temp, lux, p_max, pump_status):
         # Gửi dữ liệu kinh tế để vẽ biểu đồ (nếu cần)
         socketio.emit('economic_data', {'profit': profit, 'delta_e': delta_e, 'reason': reason})
 
-    # ==========================================================
+    
     # CHẾ ĐỘ 2: AUTO (LOGIC CŨ - DỰA VÀO NGƯỠNG NHIỆT)
-    # ==========================================================
+    
     elif system_state["mode"] == "AUTO":
         # A. Logic BẬT
         if pred_temp_basic >= TEMP_THRESHOLD_HIGH:
@@ -296,11 +440,18 @@ def check_system_decision(current_temp, lux, p_max, pump_status):
 
             elapsed = current_time - system_state["warning_start_time"]
             if elapsed > AUTO_DELAY_SECONDS and pump_status == 0 and not system_state["is_auto_running"]:
-                mqtt_client.publish(TOPIC_PUB, json.dumps({"command": "2", "type": "COOL", "source": "AI_AUTO"}))
-                system_state["is_auto_running"] = True
-                system_state["last_auto_start"] = current_time
-                save_history("AI_AUTO", "BẬT", "Quá nhiệt", "AUTO")
-                socketio.emit('system_alert', {'level': 'danger', 'message': 'AUTO: Đã bật bơm bảo vệ!'})
+                skip, rain_reason = should_skip_cooling_due_to_rain()
+                if skip:
+                    socketio.emit('system_alert', {
+                        'level': 'info',
+                        'message': f"AUTO: Dự báo sắp quá nhiệt ({pred_temp_basic:.1f}°C) nhưng sắp mưa ({rain_reason}). Tạm không phun để tiết kiệm."
+                    })
+                else:
+                    mqtt_client.publish(TOPIC_PUB, json.dumps({"command": "2", "type": "COOL", "source": "AI_AUTO"}))
+                    system_state["is_auto_running"] = True
+                    system_state["last_auto_start"] = current_time
+                    save_history("AI_AUTO", "BẬT", "Quá nhiệt", "AUTO")
+                    socketio.emit('system_alert', {'level': 'danger', 'message': 'AUTO: Đã bật bơm bảo vệ!'})
 
         # B. Logic TẮT
         elif system_state["is_auto_running"]:
@@ -312,9 +463,9 @@ def check_system_decision(current_temp, lux, p_max, pump_status):
                 save_history("AI_AUTO", "TẮT", "Đã mát", "AUTO")
                 socketio.emit('system_alert', {'level': 'success', 'message': 'AUTO: Nhiệt độ ổn định. Tắt bơm.'})
 
-    # ==========================================================
+    
     # CHẾ ĐỘ 3: MANUAL (CHỈ ĐƯA RA LỜI KHUYÊN)
-    # ==========================================================
+   
     else: 
         # Lời khuyên BẬT
         if pred_temp_basic >= TEMP_THRESHOLD_HIGH and pump_status == 0:
@@ -356,9 +507,9 @@ def on_message(client, userdata, msg):
         # Xử lý Trạng thái bơm (Quan trọng: Chấp nhận cả 1, "1", "true", "ON")
         raw_pump = data.get('pump_status', 0)
         pump_status = 1 if str(raw_pump).upper() in ['1', 'TRUE', 'ON'] else 0
-        # ---------------------------------------------------------
+        
         # [MỚI] QUY TRÌNH TÍNH SỨC KHỎE "TỰ HỌC"
-        # ---------------------------------------------------------
+       
         # B1: Dạy cho hệ thống học (nếu trời đẹp)
         health_brain.learn(lux, p_actual_W)
         
@@ -445,6 +596,31 @@ def save_params_api():
         
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/weather', methods=['GET'])
+def get_weather_api():
+    missing = []
+    if not WEATHER_API_KEY:
+        missing.append("WEATHER_API_KEY")
+    if not WEATHER_LAT:
+        missing.append("WEATHER_LAT")
+    if not WEATHER_LON:
+        missing.append("WEATHER_LON")
+    if missing:
+        return jsonify({
+            "status": "error",
+            "message": f"Thiếu cấu hình: {', '.join(missing)}. Hãy tạo file .env trong thư mục ASPC và điền giá trị."
+        }), 400
+
+    result = get_weather_cached()
+    if result is None:
+        return jsonify({
+            "status": "error",
+            "message": "Không lấy được dữ liệu thời tiết (kiểm tra API key, internet, hoặc giới hạn API)."
+        }), 502
+    return jsonify({"status": "success", "data": result})
+
 # [API MỚI] Lấy thông số hiện tại để hiển thị lên form
 @app.route('/api/get_params', methods=['GET'])
 def get_params_api():
@@ -577,9 +753,9 @@ def run_simulation():
         # 3. NHIỆT ĐỘ MÔI TRƯỜNG
         sim_state['temp_env'] = 30 + 5 * math.sin((virtual_hour - 9) * (math.pi / 12))
 
-        # -----------------------------------------------------------
+        
         # [QUAN TRỌNG] LOGIC TÁC ĐỘNG CỦA BƠM
-        # -----------------------------------------------------------
+        
         
         # A. Tính nhiệt độ mục tiêu khi KHÔ (Chỉ có nắng)
         # T_dry = Môi trường + (Lux * Hệ số nóng)
@@ -614,7 +790,7 @@ def run_simulation():
         # D. Cập nhật nhiệt độ theo công thức quán tính
         sim_state['temp_panel'] = current + (final_target - current) * inertia
 
-        # -----------------------------------------------------------
+        
         # 5. TÍNH CÔNG SUẤT (Để thấy hiệu quả kinh tế)
         sim_power = 0
         if sim_state['lux'] > 0:
@@ -624,7 +800,7 @@ def run_simulation():
             if eff < 0.5: eff = 0.5
             sim_power = (sim_state['lux']/1000.0) * 0.5 * eff # Công thức giả định P=50W
 
-        # -----------------------------------------------------------
+      
         # GỬI DỮ LIỆU ĐI
         fake_payload = {
             'lux_ref': int(sim_state['lux']),
@@ -663,7 +839,17 @@ if __name__ == '__main__':
         
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "5000"))
-    print(f"🚀 Server ASPC khởi chạy tại http://localhost:{port}")
+    # Trên Windows, bind 0.0.0.0 đôi khi bị chặn bởi policy/firewall.
+    # Mặc định chuyển sang 127.0.0.1 để chạy local ổn định.
+    bind_host = host
+    if os.name == "nt" and host == "0.0.0.0" and os.getenv("ALLOW_BIND_ALL", "False").lower() != "true":
+        bind_host = "127.0.0.1"
+
+    chosen_port = _find_free_port(bind_host, port)
+    if chosen_port != port:
+        print(f"⚠️ Port {port} đang bận. Tự chuyển sang port {chosen_port}.")
+    port = chosen_port
+    print(f"🚀 Server ASPC khởi chạy tại http://{bind_host}:{port}")
     
     # Chạy Flask Server
-    socketio.run(app, host=host, port=port, debug=True, use_reloader=False)
+    socketio.run(app, host=bind_host, port=port, debug=True, use_reloader=False, allow_unsafe_werkzeug=True)
