@@ -78,11 +78,17 @@ h2 i { margin-right: 10px; color: var(--secondary-color); }
     border-bottom: 1px solid rgba(255, 255, 255, 0.05); /* Viền cực mảnh */
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
+
+
+
+/*chỉnh màu đen cho thanh điều hướng */
 .navbar.bg-dark {
     background-color: #000000 !important; /* Đen 100% */
     height: 72px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05); /* Viền cực mảnh cho sang */
 }
+
+
 
 /* Logo Brand */
 .navbar-brand {

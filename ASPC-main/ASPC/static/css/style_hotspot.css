@@ -1,0 +1,63 @@
+/* Container chính */
+.risk-card {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    border-top: 6px solid #6c757d;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.risk-card:hover {
+    transform: translateY(-10px);
+}
+
+/* Chỉ số Rủi ro chính */
+.risk-value-container {
+    margin: 20px 0;
+}
+
+.risk-value {
+    font-size: 4.5rem;
+    font-weight: 900;
+    color: #333;
+    line-height: 1;
+}
+
+.risk-unit {
+    font-size: 1.5rem;
+    color: #888;
+}
+
+/* Hiệu ứng Cảnh báo Đỏ (Danger) */
+.status-danger {
+    border-top-color: #dc3545 !important;
+    background-color: #fff8f8;
+    animation: pulse-red-border 2s infinite;
+}
+
+@keyframes pulse-red-border {
+    0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.4); }
+    70% { box-shadow: 0 0 0 20px rgba(220, 53, 69, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+}
+
+/* Hiệu ứng Cảnh báo Vàng (Warning) */
+.status-warning {
+    border-top-color: #ffc107 !important;
+    background-color: #fffdf5;
+}
+
+/* Hiệu ứng An toàn (Success) */
+.status-success {
+    border-top-color: #28a745 !important;
+}
+
+/* Badge trạng thái */
+.badge-custom {
+    padding: 8px 16px;
+    border-radius: 50px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}

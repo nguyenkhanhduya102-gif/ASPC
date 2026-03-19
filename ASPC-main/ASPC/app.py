@@ -33,6 +33,7 @@ import paho.mqtt.client as mqtt
 from ai_engine import SolarLSTM 
 from health_engine import SolarHealthEngine
 from optimizer import SolarOptimizer
+from hotspot_engine import HotspotDetector
 
 DB_NAME = "aspc_history.db"
 SIMULATION_MODE = os.getenv("SIMULATION_MODE", "False").lower() == "true"
@@ -104,7 +105,7 @@ def _find_free_port(host: str, start_port: int, max_tries: int = 30) -> int:
                 pass
     return int(start_port)
 
-# DATABASE & AI (GIỮ NGUYÊN)
+# DATABASE & AI
 def init_db():
     try:
         conn = sqlite3.connect(DB_NAME)
@@ -123,6 +124,8 @@ print("❤️ Đang khởi tạo Health Engine...")
 health_brain = SolarHealthEngine()
 print("💰 Đang khởi tạo Optimizer Engine...")
 optimizer_brain = SolarOptimizer()
+print("Đang khởi tạo hotspot...")
+hotspot_brain = HotspotDetector()
 
 class WeatherCache:
     def __init__(self, ttl_seconds: int = 600):
@@ -542,6 +545,10 @@ def on_message(client, userdata, msg):
         if ai_result:
             socketio.emit('ai_data', {'ai': ai_result})
 
+
+
+        hotspot_result = hotspot_brain.detect(temp_panel, temp_env, lux, p_actual_W, p_theory_val)
+
         # 3. Gửi dữ liệu ra Web
         socketio.emit('sensor_data', {
             'temp_panel': round(temp_panel,2),
@@ -552,7 +559,19 @@ def on_message(client, userdata, msg):
             'p_actual': round(p_actual_W, 2),
             'p_theory': round(p_theory_val, 2),
             'g_meas': round(g_meas, 2),             # Gửi thêm Bức xạ tính toán để hiển thị nếu cần
-            'pump_status': pump_status
+            'pump_status': pump_status,
+            'hotspot_risk': hotspot_result['risk_percent'],
+            'hotspot_status': hotspot_result['status'],
+            'hotspot_reason': hotspot_result['reason'],
+            'hotspot_action': hotspot_result['action'],
+            'hotspot_delta_t': hotspot_result['delta_t']
+        })
+        if hotspot_result['status'] == 'DANGER' and pump_status == 0:
+         client.publish(TOPIC_PUB, json.dumps({"pump": 1}))
+         pump_status = 1
+         socketio.emit('system_alert', {
+            'level': 'danger', 
+            'message': f"🔥 AI Phát hiện Hotspot! Tự động kích hoạt phun nước bảo trì. Lý do: {hotspot_result['reason']}"
         })
     except ValueError as e:
         print(f"❌ Lỗi dữ liệu không phải số: {e}")
@@ -657,7 +676,9 @@ def get_history_api():
         c.execute("SELECT * FROM history ORDER BY id DESC LIMIT 50")
         return json.dumps([dict(row) for row in c.fetchall()])
     except: return "[]"
-
+@app.route('/hotspot.html')
+def hotspot_page(): 
+    return render_template('hotspot.html')
 # [MỚI] Xử lý chuyển chế độ
 @socketio.on('switch_mode')
 def handle_switch_mode(data):

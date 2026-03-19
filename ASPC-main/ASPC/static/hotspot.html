@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASPC - Giám sát Điểm Nóng AI</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js" defer></script>
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style_index.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style_hotspot.css') }}">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+
+    <style>
+    /* Lớp phủ toàn màn hình */
+    .bg-image-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        /* Thay đường dẫn ảnh của Duy vào đây */
+        background-image: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), 
+                          url('https://images.unsplash.com/photo-1558444479-c84825927c3a?q=80&w=2070&auto=format&fit=crop'); 
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        z-index: -1; /* Đẩy ra sau cùng */
+    }
+
+    /* Đảm bảo nội dung chính có độ nổi bật */
+    .section-card {
+        background: rgba(255, 255, 255, 0.95); /* Làm card hơi trong suốt một chút cho đẹp */
+        backdrop-filter: blur(5px); /* Hiệu ứng kính mờ (glassmorphism) */
+        border-radius: 15px;
+        border: none;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+    }
+</style>
+</head>
+<body class="bg-light">
+    <div class="bg-image-overlay"></div>
+
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top" style="background-color: #000000 !important;">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-bolder" href="/" style="letter-spacing: 1.5px;">A S P C</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarHotspot">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarHotspot">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item"><a class="nav-link active" href="./index.html">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link" href="./history.html">Lịch Sử</a></li>
+        <li class="nav-item"><a class="nav-link" href="./parameter.html">Thông Số</a></li>
+        <li class="nav-item"><a class="nav-link" href="./health.html">Sức Khỏe</a></li>
+        <li class="nav-item"><a class="nav-link" href="./weather.html">Thời Tiết</a> </li>
+        <li class="nav-item"><a class="nav-link" href="./hotspot.html">Điểm Nóng</a></li>
+      </ul>
+      <span class="navbar-text text-light">
+        <i class="fas fa-microchip me-1 text-primary"></i> AI Predictive Maintenance
+      </span>
+    </div>
+  </div>
+</nav>
+
+<main class="container mt-5 pt-5">
+    <div id="ai-alert-container" class="mb-4"></div>
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div id="main-card" class="risk-card text-center h-100 d-flex flex-column justify-content-center">
+                <h5 class="text-muted text-uppercase fw-bold mb-3">Rủi ro Điểm Nóng (Hotspot)</h5>
+                
+                <div class="risk-value-container">
+                    <span class="risk-value" id="risk-display">0</span>
+                    <span class="risk-unit">%</span>
+                </div>
+
+                <div class="mt-3">
+                    <span id="status-badge" class="badge-custom badge bg-success">
+                        <i class="fas fa-check-circle"></i> Hệ thống an toàn
+                    </span>
+                </div>
+                
+                <div class="mt-4 pt-3 border-top">
+                    <small class="text-muted">
+                        <i class="fas fa-clock"></i> Cập nhật: <span id="last-update">Vừa xong</span>
+                    </small>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="risk-card h-100">
+                <h5 class="fw-bold mb-4">
+                    <i class="fas fa-brain text-primary me-2"></i>Chẩn đoán chuyên sâu từ AI
+                </h5>
+                
+                <div class="diagnosis-item mb-4">
+                    <label class="text-muted d-block small fw-bold">NGUYÊN NHÂN DỰ KIẾN</label>
+                    <p class="fs-5 mb-0" id="hotspot-reason">Đang thu thập dữ liệu cảm biến...</p>
+                </div>
+
+                <div class="diagnosis-item mb-4">
+                    <label class="text-muted d-block small fw-bold">HÀNH ĐỘNG KHUYẾN NGHỊ</label>
+                    <div class="p-3 bg-light border-start border-4 border-primary rounded">
+                        <p class="mb-0" id="hotspot-action">Hệ thống đang ở trạng thái lý tưởng.</p>
+                    </div>
+                </div>
+
+                <div class="row mt-4 pt-2 border-top">
+                    <div class="col-6">
+                        <small class="text-muted d-block">Chênh lệch nhiệt (<span title="Sự chênh lệch nhiệt độ giữa điểm nóng nhất và nhiệt độ trung bình của tấm pin" style="cursor: help; border-bottom: 1px dotted #999;">ΔT</span>)</small>
+                        <span class="fw-bold fs-5 text-dark"><span id="delta-t">0.0</span>°C</span>
+                    </div>
+                    <div class="col-6 text-end">
+                        <small class="text-muted d-block">Mô hình AI</small>
+                        <span class="badge bg-dark">Physics-Informed LSTM</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='js/hotspot.js') }}"></script>
+
+</body>
+</html>
