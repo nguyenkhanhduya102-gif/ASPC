@@ -19,7 +19,7 @@ class SolarLSTM:
         self.model = None
         self.scaler = None
         
-        # --- CẤU HÌNH TỐI ƯU ---
+        #Cấu hình tối ưu cho hệ thống
         
         self.window_size = 30 
         
@@ -27,7 +27,7 @@ class SolarLSTM:
         
         self.data_history = []     
         self.new_data_buffer = []  
-        self.RETRAIN_THRESHOLD = 100 # Gom nhiều dữ liệu hơn chút rồi mới học
+        self.RETRAIN_THRESHOLD = 100 # Gom nhiều dữ liệu hơn chút rồi mới học (cần lên tầm 1 tháng dữ liệu)
         self.MAX_TRAIN_SIZE = 20000 
         self.is_training = False 
         
@@ -51,7 +51,7 @@ class SolarLSTM:
             try:
                 self.model = load_model(self.model_path, custom_objects={'Huber': Huber})
                 if self.model.input_shape[-1] != self.num_features:
-                    print(f"⚠️ Model không khớp input. Đã xóa.")
+                    print(f" Model không khớp input. Đã xóa.")
                     self.model = None
                     if os.path.exists(self.model_path): os.remove(self.model_path)
             except:
@@ -108,10 +108,10 @@ class SolarLSTM:
                 "r2": round(r2, 3)      
             }
             
-            print(f"📊 ĐÁNH GIÁ: Sai số MAE = {mae:.2f}°C | R2 Score = {r2:.2f}")
+            print(f" ĐÁNH GIÁ: Sai số MAE = {mae:.2f}°C | R2 Score = {r2:.2f}")
             
         except Exception as e:
-            print(f"⚠️ Lỗi đánh giá: {e}")
+            print(f" Lỗi đánh giá: {e}")
 
     def retrain_model(self):
         self.is_training = True
@@ -173,7 +173,7 @@ class SolarLSTM:
             self.new_data_buffer = [] 
             
         except Exception as e:
-            print(f"❌ Lỗi Retrain: {e}")
+            print(f" Lỗi Retrain: {e}")
         finally: 
             self.is_training = False
 

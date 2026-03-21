@@ -243,3 +243,226 @@ h2 {
         font-size: 1.5rem;
     }
 }
+
+/* CSS cho báo cáo kinh tế */
+.economic-report-section {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.report-form {
+    display: flex;
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 15px;
+}
+
+.form-group {
+    flex: 1;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-control {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.btn-primary {
+    padding: 8px 15px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    background: #0056b3;
+}
+
+.report-display {
+    margin-top: 15px;
+}
+
+.report-card {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 4px solid #28a745;
+}
+
+.text-danger {
+    color: #dc3545;
+}
+
+.report-panel {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: blur(8px);
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+
+.report-head {
+  margin-bottom: 14px;
+}
+
+.report-title {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.report-subtitle {
+  margin: 6px 0 0;
+  color: #6b7280;
+  font-size: 0.95rem;
+}
+
+.report-form-modern {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 12px;
+  align-items: end;
+  margin: 14px 0 18px;
+}
+
+.report-form-modern .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.report-form-modern label {
+  font-weight: 600;
+  color: #374151;
+}
+
+.report-form-modern input {
+  height: 48px;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  padding: 0 14px;
+  font-size: 1.05rem;
+  outline: none;
+  background: #fff;
+}
+
+.report-form-modern input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.16);
+}
+
+.btn-report {
+  height: 48px;
+  border: none;
+  border-radius: 12px;
+  padding: 0 20px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.2s ease;
+}
+
+.btn-report:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+}
+
+.report-result {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 18px;
+  min-height: 130px;
+  color: #111827;
+}
+
+.report-result h5 {
+  font-size: 2rem;
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+.report-result h6 {
+  margin-top: 14px;
+  margin-bottom: 8px;
+  color: #374151;
+  font-weight: 700;
+}
+
+.report-result p {
+  margin-bottom: 8px;
+  font-size: 1.15rem;
+}
+
+.empty-state {
+  color: #6b7280;
+}
+
+@media (max-width: 900px) {
+  .report-form-modern {
+    grid-template-columns: 1fr;
+  }
+
+  .btn-report {
+    width: 100%;
+  }
+
+  .report-title {
+    font-size: 1.6rem;
+  }
+}
+.report-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.report-block {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.report-block-title {
+  display: inline-block;
+  margin: 0 0 10px 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 0.92rem;
+  letter-spacing: .2px;
+}
+
+.report-block.economic .report-block-title {
+  background: #e8f1ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.report-block.health .report-block-title {
+  background: #e9fbef;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+@media (max-width: 900px) {
+  .report-split {
+    grid-template-columns: 1fr;
+  }
+}

@@ -23,8 +23,9 @@
         <li class="nav-item"><a class="nav-link" href="./index.html">Dashboard</a></li>
         <li class="nav-item"><a class="nav-link" href="./history.html">Lịch Sử</a></li>
         <li class="nav-item"><a class="nav-link" href="./parameter.html">Thông Số</a></li>
-        <li class="nav-item"><a class="nav-link active" href="./health.html">Sức Khỏe</a></li>
+        <li class="nav-item"><a class="nav-link active" href="./health.html">Sức Khỏe & Báo Cáo</a></li>
         <li class="nav-item"><a class="nav-link" href="./weather.html">Thời tiết</a></li>
+        <li class="nav-item"><a class="nav-link" href="./hotspot.html">Điểm Nóng</a></li>
       </ul>
     </div>
   </div>
@@ -76,11 +77,104 @@
         </div>
     </div>
 
+  <section class="report-panel mt-4">
+  <div class="report-head">
+    <h3 class="report-title">Báo Cáo Kinh Tế & Sức Khỏe Theo Tháng</h3>
+    <p class="report-subtitle">Theo dõi hiệu quả vận hành và tình trạng tấm pin theo từng tháng.</p>
+  </div>
+
+  <form id="report-form" class="report-form-modern">
+    <div class="field">
+      <label for="year">Năm</label>
+      <input type="number" id="year" min="2020" max="2035" value="2026" />
+    </div>
+
+    <div class="field">
+      <label for="month">Tháng</label>
+      <input type="number" id="month" min="1" max="12" value="3" />
+    </div>
+
+    <button type="submit" class="btn-report">Xuất Báo Cáo</button>
+  </form>
+
+  <div id="economic-report" class="report-result">
+    <div class="empty-state">Chọn năm/tháng và nhấn <strong>Xuất Báo Cáo</strong>.</div>
+  </div>
+</section>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script src="{{ url_for('static', filename='js/health.js') }}"></script>
+<script>
+// [MỚI] Tự động load báo cáo tháng hiện tại khi load trang
+document.addEventListener('DOMContentLoaded', function() {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;  // JS month 0-based
+    loadReport(currentYear, currentMonth);
+    document.getElementById('year').value = currentYear;
+    document.getElementById('month').value = currentMonth;
+});
 
+
+
+// Hàm load báo cáo
+function loadReport(year, month) {
+    fetch(`/api/economic_report/${year}/${month}`)
+        .then(response => response.json())
+        .then(data => {
+            const box = document.getElementById('economic-report');
+
+            if (data.error) {
+                box.innerHTML = `<p class="text-danger">Lỗi: ${data.error}</p>`;
+                return;
+            }
+
+            // Hỗ trợ cả 2 kiểu JSON:
+            // 1) nested: { economic: {...}, health: {...} }
+            // 2) flat:   { total_profit, total_energy_saved, ... }
+            const profit = Number(data?.economic?.total_profit ?? data?.total_profit ?? 0);
+            const saved = Number(data?.economic?.total_energy_saved ?? data?.total_energy_saved ?? 0);
+            const avgHealth = Number(data?.health?.avg_health_score ?? 0);
+            const totalRecords = Number(data?.health?.total_records ?? 0);
+            const goodDays = Number(data?.health?.good_days ?? 0);
+            const badDays = Number(data?.health?.bad_days ?? 0);
+
+            box.innerHTML = `
+  <h5>Tháng: ${data.month ?? '--'}</h5>
+
+  <div class="report-split">
+    <div class="report-block economic">
+      <p class="report-block-title">💰 Kinh Tế</p>
+      <p><strong>Tổng Lợi Nhuận:</strong> ${profit.toFixed(2)} VND</p>
+      <p><strong>Tổng Năng Lượng Tiết Kiệm:</strong> ${saved.toFixed(2)} kWh</p>
+    </div>
+
+    <div class="report-block health">
+      <p class="report-block-title">🩺 Sức Khỏe Tấm Pin</p>
+      <p><strong>Điểm Sức Khỏe Trung Bình:</strong> ${avgHealth.toFixed(2)}%</p>
+      <p><strong>Tổng Bản Ghi:</strong> ${totalRecords}</p>
+      <p><strong>Ngày Tốt:</strong> ${goodDays} | <strong>Ngày Xấu:</strong> ${badDays}</p>
+    </div>
+  </div>
+`;
+        })
+        .catch(err => {
+            document.getElementById('economic-report').innerHTML =
+                `<p class="text-danger">Lỗi kết nối: ${err.message}</p>`;
+        });
+}
+
+
+
+// Xử lý form
+document.getElementById('report-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const year = document.getElementById('year').value;
+    const month = document.getElementById('month').value;
+    loadReport(year, month);
+});
+</script>
 </body>
 </html>

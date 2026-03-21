@@ -5,9 +5,7 @@ class HotspotDetector:
         self.consecutive_danger_count = 0
 
     def detect(self, t_panel, t_env, lux, p_actual, p_theory):
-        """
-        AI logic: So sánh mô hình nhiệt vật lý với thực tế để phát hiện Hotspot.
-        """
+        
         # 1. Tính nhiệt độ lý thuyết (Physics-Informed)
         # Tấm pin thường nóng hơn môi trường dựa trên cường độ bức xạ (Lux)
         irradiance_ratio = lux / 80000.0 if lux > 0 else 0

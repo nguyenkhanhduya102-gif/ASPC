@@ -20,10 +20,7 @@ class SolarOptimizer:
         ]
 
     def update_params(self, alpha, p_pump, monthly_kwh):
-        """
-        Cập nhật tham số từ người dùng.
-        monthly_kwh: Số điện trung bình nhà dùng mỗi tháng.
-        """
+        
         self.alpha_p = float(alpha) / 100.0
         self.p_pump_cons = float(p_pump)
         
@@ -37,17 +34,17 @@ class SolarOptimizer:
                 break
         
         self.elec_price = detected_price
-        print(f"💰 Optimizer: Với {usage} kWh/tháng -> Áp dụng giá Bậc thang: {self.elec_price} đ/kWh")
+        print(f" Optimizer: Với {usage} kWh/tháng -> Áp dụng giá Bậc thang: {self.elec_price} đ/kWh")
 
     def calculate_decision(self, g_meas, p_max_stc, t_pred_off, t_pred_on):
-        # ... (Giữ nguyên logic tính toán cũ) ...
+        
         
         # 1. Ràng buộc an toàn
         if t_pred_off > self.temp_safe_max:
-            return True, 0, 0, "⚠️ BẬT bơm bảo vệ (Quá nhiệt)!"
+            return True, 0, 0, " BẬT bơm bảo vệ (Quá nhiệt)!"
 
         if g_meas < self.g_min:
-            return False, 0, 0, "☁️ Bức xạ thấp, tắt bơm."
+            return False, 0, 0, " Bức xạ thấp, tắt bơm."
 
         # 2. Tính toán năng lượng
         loss_factor_off = self.alpha_p * (t_pred_off - 25)
@@ -70,6 +67,6 @@ class SolarOptimizer:
         profit_vnd = (delta_e / 1000.0) * self.elec_price
 
         if profit_vnd > 0:
-            return True, delta_e, profit_vnd, f"✅ Có lãi ({profit_vnd:.1f}đ). Giá điện: {self.elec_price}đ"
+            return True, delta_e, profit_vnd, f" Có lãi ({profit_vnd:.1f}đ). Giá điện: {self.elec_price}đ"
         else:
-            return False, delta_e, profit_vnd, f"📉 Lỗ ({profit_vnd:.1f}đ). Tắt tiết kiệm."
+            return False, delta_e, profit_vnd, f" Lỗ ({profit_vnd:.1f}đ). Tắt tiết kiệm."

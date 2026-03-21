@@ -61,3 +61,47 @@
     text-transform: uppercase;
     letter-spacing: 1px;
 }
+
+/* CSS cho cảnh báo bảo vệ */
+.alert-overlay {
+    position: fixed;
+    top: 80px;
+    right: 10px;
+    width: 320px;
+    max-height: 400px;
+    overflow-y: auto;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 15px;
+    padding: 15px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(10px);
+    z-index: 1000;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.alert-title {
+    color: #dc3545;
+    font-weight: bold;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.alert-item {
+    padding: 10px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    border-left: 4px solid;
+}
+
+.alert-item.critical {
+    background-color: #f8d7da;
+    color: #721c24;
+    border-left-color: #dc3545;
+}
+
+.alert-item.warning {
+    background-color: #fff3cd;
+    color: #856404;
+    border-left-color: #ffc107;
+}

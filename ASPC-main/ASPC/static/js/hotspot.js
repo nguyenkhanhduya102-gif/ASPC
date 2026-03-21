@@ -49,4 +49,33 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     console.log("🚀 ASPC Hotspot Radar Engine đã sẵn sàng!");
+
+
+    socket.on('system_alert', function(data) {
+        console.log('📢 Cảnh báo bảo vệ trên hotspot:', data);
+        
+        // Hiển thị popup
+        if (data.level === 'CRITICAL') {
+            alert('🚨 CẢNH BÁO KHẨN CẤP: ' + data.message);
+        } else if (data.level === 'WARNING') {
+            alert('⚠️ CẢNH BÁO: ' + data.message);
+        }
+        
+        // Thêm vào danh sách
+        const alertList = document.getElementById('alert-list');
+        if (alertList) {
+            const alertItem = document.createElement('div');
+            alertItem.className = 'alert-item ' + data.level.toLowerCase();
+            alertItem.innerHTML = `<strong>${data.level}:</strong> ${data.message} <small>(${new Date().toLocaleTimeString()})</small>`;
+            alertList.appendChild(alertItem);
+            
+            // Tự động xóa sau 30s
+            setTimeout(() => alertItem.remove(), 30000);
+        }
+    });
+
+    console.log("🚀 ASPC Hotspot Radar Engine đã sẵn sàng!");
+
+
+
 });

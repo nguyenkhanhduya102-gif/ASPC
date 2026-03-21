@@ -96,3 +96,4 @@ function updateText(id, text) {
     const el = document.getElementById(id);
     if (el) el.innerText = text;
 }
+
