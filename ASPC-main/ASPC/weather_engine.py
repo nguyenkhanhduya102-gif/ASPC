@@ -99,3 +99,17 @@ class WeatherForecaster:
         if data:
             return {"f_temp": data['avg_temp'], "f_clouds": data['avg_clouds']}
         return {"f_temp": 30, "f_clouds": 50}
+    
+
+    def get_weather():
+    # Lấy từ Render (Ưu tiên số 1)
+      api_key = os.environ.get('WEATHER_API_KEY')
+      lat = os.environ.get('WEATHER_LAT')
+      lon = os.environ.get('WEATHER_LON')
+
+      if not api_key:
+        # Nếu vẫn không thấy, Dashboard sẽ báo lỗi này thay vì mã 400 trống rỗng
+          return {"error": "Chưa nhận được API Key từ Render"}, 400
+        
+    # Tiếp tục logic gọi API OpenWeather của Duy ở đây...
+      return {"status": "success", "temp": 30} # Ví dụ trả về
