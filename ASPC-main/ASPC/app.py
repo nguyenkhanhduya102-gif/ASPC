@@ -894,7 +894,7 @@ def get_history_api():
 def hotspot_page(): 
     return render_template('hotspot.html')
 @app.route('/api/economic_report/<int:year>/<int:month>')
-#Báo cáo kinh tế , sẽ sửa thêm sức khỏe sau
+#Báo cáo kinh tế + Sức khỏe 
 def get_economic_report_api(year, month):
     report = get_monthly_report(year, month)
     if "error" in report:
@@ -1079,6 +1079,22 @@ def run_simulation():
         # if sim_state['temp_panel'] < 35: sim_state['pump_status'] = 0
 
         time.sleep(1.0)
+
+
+
+
+
+
+#from flask_cors import CORS
+#app = Flask(__name__)
+#CORS(app) # Dòng này cực kỳ quan trọng để mở cổng kết nối
+
+
+
+
+
+
+
 if __name__ == '__main__':
     # 1. Chạy luồng MQTT thực
     threading.Thread(target=run_mqtt, daemon=True).start()

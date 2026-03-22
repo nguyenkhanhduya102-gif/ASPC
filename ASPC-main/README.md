@@ -185,9 +185,8 @@ ASPC/
 ## 📊 Tính Năng AI
 
 - **LSTM Multivariate**: Học từ 5 features (lux, nhiệt độ tấm, nhiệt độ môi trường, độ ẩm, trạng thái bơm)
-- **Online Learning**: Tự retrain sau mỗi 100 mẫu dữ liệu mới , API dự báo thời tiết
+- **Online Learning**: Tự retrain sau mỗi 100 mẫu dữ liệu mới
 - **Scenario Prediction**: Dự báo nhiệt độ trong 2 kịch bản (bơm bật / bơm tắt)
-
 
 ---
 
