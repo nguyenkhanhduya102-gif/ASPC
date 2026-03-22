@@ -1103,19 +1103,16 @@ if __name__ == '__main__':
     if SIMULATION_MODE:
         threading.Thread(target=run_simulation, daemon=True).start()
         
-    host = os.getenv("HOST", "0.0.0.0")
-    port = int(os.getenv("PORT", "5000"))
-    # Trên Windows, bind 0.0.0.0 đôi khi bị chặn bởi policy/firewall.
-    # Mặc định chuyển sang 127.0.0.1 để chạy local ổn định.
-    bind_host = host
-    if os.name == "nt" and host == "0.0.0.0" and os.getenv("ALLOW_BIND_ALL", "False").lower() != "true":
-        bind_host = "127.0.0.1"
 
-    chosen_port = _find_free_port(bind_host, port)
-    if chosen_port != port:
-        print(f"⚠️ Port {port} đang bận. Tự chuyển sang port {chosen_port}.")
-    port = chosen_port
-    print(f"🚀 Server ASPC khởi chạy tại http://{bind_host}:{port}")
+
+    # Render sẽ cấp cổng qua biến môi trường PORT, nếu không có thì dùng 5000
+    port = int(os.environ.get("PORT", 5000))
     
-    # Chạy Flask Server
-    socketio.run(app, host=bind_host, port=port, debug=True, use_reloader=False, allow_unsafe_werkzeug=True)
+    # Trên Render (Linux) phải dùng 0.0.0.0 để ra được internet
+    # Ở máy Duy (Windows) thì dùng 127.0.0.1 cho ổn định
+    host = "0.0.0.0" if os.environ.get("RENDER") else "127.0.0.1"
+
+    print(f"🚀 ASPC đang 'cất cánh' tại http://{host}:{port}")
+    
+    # Chạy server (Bỏ cái _find_free_port đi cho đỡ lỗi cổng)
+    socketio.run(app, host=host, port=port, debug=False, use_reloader=False, allow_unsafe_werkzeug=True)
