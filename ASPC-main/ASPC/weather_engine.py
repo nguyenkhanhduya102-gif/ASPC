@@ -111,5 +111,6 @@ class WeatherForecaster:
         # Nếu vẫn không thấy, Dashboard sẽ báo lỗi này thay vì mã 400 trống rỗng
           return {"error": "Chưa nhận được API Key từ Render"}, 400
         
-    # Tiếp tục logic gọi API OpenWeather của Duy ở đây...
+    # Tiếp tục logic gọi API OpenWeather của Duy ở đây...git add .
+    
       return {"status": "success", "temp": 30} # Ví dụ trả về

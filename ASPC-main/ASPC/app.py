@@ -516,13 +516,13 @@ def check_protection_alerts(temp_panel, temp_env, humidity, lux, power, pump_sta
 
 
 #  [LOGIC QUAN TRỌNG] KIỂM TRA & RA QUYẾT ĐỊNH 
-def check_system_decision(current_temp, lux, p_max, pump_status):
+def check_system_decision(temp_panel , lux ,p_max, pump_status):
     global system_state
     current_time = time.time()
     
     # 1. Dự báo nhiệt độ cơ bản (cho Auto/Manual cũ)
     ai_result = ai_brain.predict()
-    pred_temp_basic = ai_result['pred_temp_5min'] if ai_result else current_temp
+    pred_temp_basic = ai_result['pred_temp_5min'] if ai_result else temp_panel
 
     
     # CHẾ ĐỘ 1: SMART ECO (TỐI ƯU KINH TẾ & AN TOÀN)
@@ -533,15 +533,15 @@ def check_system_decision(current_temp, lux, p_max, pump_status):
         pred_on = ai_brain.predict_scenario(1)  # Nếu Bật bơm
 
         # Fallback nếu AI chưa đủ dữ liệu (Dùng logic thô)
-        if pred_off is None: pred_off = current_temp + 0.5
-        if pred_on is None: pred_on = current_temp - 2.0
+        if pred_off is None: pred_off = temp_panel + 0.5
+        if pred_on is None: pred_on = temp_panel - 2.0
 
         # B. Tính toán G thực tế (dựa vào hệ số k đã học)
         g_meas = lux * health_brain.k_factor
 
         # C. Gọi Optimizer tính bài toán kinh tế
         should_run, delta_e, profit, reason = optimizer_brain.calculate_decision(
-            g_meas, p_max, pred_off, pred_on
+            g_meas, health_brain.p_max, pred_off, pred_on
         )
 
         # D. Thực thi quyết định
@@ -575,7 +575,7 @@ def check_system_decision(current_temp, lux, p_max, pump_status):
                 # - VÀ: Nhiệt độ phải giảm sâu hơn ngưỡng an toàn ít nhất 3 độ (Vùng trễ)
                 #   (Ví dụ: An toàn là 45, thì phải xuống dưới 42 mới được tắt)
                 
-                is_cool_enough = current_temp < (safe_limit - 3.0) 
+                is_cool_enough = temp_panel < (safe_limit - 3.0) 
                 
                 if run_duration > MIN_RUN_TIME:
                     if is_cool_enough:
@@ -618,7 +618,7 @@ def check_system_decision(current_temp, lux, p_max, pump_status):
         # B. Logic TẮT
         elif system_state["is_auto_running"]:
             run_duration = current_time - system_state["last_auto_start"]
-            if current_temp < TEMP_THRESHOLD_SAFE and run_duration > MIN_RUN_TIME:
+            if temp_panel < TEMP_THRESHOLD_SAFE and run_duration > MIN_RUN_TIME:
                 mqtt_client.publish(TOPIC_PUB, json.dumps({"command": "0", "type": "COOL", "source": "AI_AUTO"}))
                 system_state["is_auto_running"] = False
                 system_state["warning_start_time"] = None
@@ -753,7 +753,11 @@ def on_message(client, userdata, msg):
         data_package = [lux, temp_panel, temp_env, humidity, pump_status]
         ai_brain.update_data(data_package)
         # Kiểm tra logic điều khiển (Gửi temp_panel đã mượt vào)
-        check_system_decision(temp_panel, lux, health_brain.p_max, pump_status)
+        check_system_decision(
+            temp_panel, 
+            lux, 
+            health_brain.p_max
+            , pump_status)
 
         ai_result = ai_brain.predict()
         if ai_result:
@@ -762,7 +766,15 @@ def on_message(client, userdata, msg):
 
 
         hotspot_result = hotspot_brain.detect(temp_panel, temp_env, lux, p_actual_W, p_theory_val)
+# Chuẩn hóa type để UI xử lý
+        reason_lower = (hotspot_result.get('reason') or "").lower()
+        hotspot_type = "normal"
+        if "bụi" in reason_lower:
+            hotspot_type = "dust"
+        elif "cell" in reason_lower or "diode" in reason_lower or "hotspot cốt lõi" in reason_lower:
+            hotspot_type = "core_fault"
 
+        dust_level = hotspot_result.get('risk_percent', 0) if hotspot_type == "dust" else 0
         # 3. Gửi dữ liệu ra Web
         socketio.emit('sensor_data', {
             'temp_panel': round(temp_panel,2),
@@ -774,23 +786,36 @@ def on_message(client, userdata, msg):
             'p_theory': round(p_theory_val, 2),
             'g_meas': round(g_meas, 2),             # Gửi thêm Bức xạ tính toán để hiển thị nếu cần
             'pump_status': pump_status,
+
             'hotspot_risk': hotspot_result['risk_percent'],
             'hotspot_status': hotspot_result['status'],
             'hotspot_reason': hotspot_result['reason'],
             'hotspot_action': hotspot_result['action'],
-            'hotspot_delta_t': hotspot_result['delta_t']
+            'hotspot_delta_t': hotspot_result['delta_t'],
+            'hotspot_type': hotspot_type,
+            'dust_level': round(dust_level, 1)
         })
+        # Safety override khi DANGER: dùng format command thống nhất với hệ thống
         if hotspot_result['status'] == 'DANGER' and pump_status == 0:
-         client.publish(TOPIC_PUB, json.dumps({"pump": 1}))
-         pump_status = 1
-         socketio.emit('system_alert', {
-            'level': 'danger', 
-            'message': f"🔥 AI Phát hiện Hotspot! Tự động kích hoạt phun nước bảo trì. Lý do: {hotspot_result['reason']}"
-        })
+            mqtt_client.publish(TOPIC_PUB, json.dumps({
+                "command": "2",
+                "type": "COOL",
+                "source": "HOTSPOT_AI"
+            }))
+            pump_status = 1
+            system_state["is_auto_running"] = True
+            system_state["last_auto_start"] = time.time()
+
+            socketio.emit('system_alert', {
+                'level': 'CRITICAL',
+                'message': f"🚨 AI phát hiện HOTSPOT nguy hiểm. Tự động bật phun làm mát. Lý do: {hotspot_result['reason']}"
+            })
+            save_history("HOTSPOT_AI", "BẬT", "HOTSPOT_DANGER", "HOTSPOT_AI")
+
     except ValueError as e:
-        print(f"❌ Lỗi dữ liệu không phải số: {e}")
+        print(f" Lỗi dữ liệu không phải số: {e}")
     except Exception as e:
-        print(f"❌ Lỗi xử lý MQTT: {e}")
+        print(f" Lỗi xử lý MQTT: {e}")
 
 mqtt_client = mqtt.Client()
 if MQTT_USERNAME: mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
@@ -803,34 +828,45 @@ def run_mqtt():
         mqtt_client.connect(BROKER, PORT, 60)
         mqtt_client.loop_forever()
     except: pass
+
+
+
+
+
+
 # [API MỚI] Lưu thông số tấm pin từ trang Parameter
 @app.route('/api/save_params', methods=['POST'])
 def save_params_api():
     try:
-        data = request.json
+        data = request.get_json(silent=True) or {}
         
         # 1. Thông số kỹ thuật
-        p_max = data.get('p_max')
-        area = data.get('area')
-        if p_max and area:
-            health_brain.update_user_params(p_max, area)
+        p_max = data.get('p_max' , None)
+        area = data.get('area' , None)
+        if p_max is not None and area is not None:
+            health_brain.update_user_params(float(p_max), float(area))
 
         # 2. Thông số kinh tế (MỚI)
-        p_pump = data.get('p_pump')       # Công suất bơm (W)
-        monthly_kwh = data.get('monthly_kwh') # Số điện tiêu thụ tháng (kWh)
-        alpha_p = data.get('alpha_p')     # Hệ số nhiệt (mặc định 0.4)
+        p_pump = data.get('p_pump' , None)       # Công suất bơm (W)
+        monthly_kwh = data.get('monthly_kwh' , None) # Số điện tiêu thụ tháng (kWh)
+        alpha_p = data.get('alpha_p' , None)     # Hệ số nhiệt (mặc định 0.4)
         
-        if p_pump and monthly_kwh:
+        if p_pump is not None and monthly_kwh is not None:
             # Nếu người dùng không nhập alpha, lấy mặc định 0.4
-            a_p = alpha_p if alpha_p else 0.4
-            optimizer_brain.update_params(a_p, p_pump, monthly_kwh)
+            a_p = float(alpha_p) if alpha_p is not None else float(getattr(optimizer_brain , "alpha_p" , 0.4))
+            optimizer_brain.update_params(a_p, float(p_pump), float(monthly_kwh))
             
         return jsonify({"status": "success", "message": "Đã cập nhật cấu hình & Giá điện Bậc thang!"})
         
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
-#gọi API thời tiết
 
+
+
+
+
+
+#gọi API thời tiết
 @app.route('/api/weather', methods=['GET'])
 def get_weather_api():
     missing = []
@@ -854,9 +890,14 @@ def get_weather_api():
         }), 502
     return jsonify({"status": "success", "data": result})
 
+
+
 # [API MỚI] Lấy thông số hiện tại để hiển thị lên form
 @app.route('/api/get_params', methods=['GET'])
 def get_params_api():
+    monthly_kwh_val = getattr(optimizer_brain, "monthly_kwh", None)
+    if monthly_kwh_val is None:
+        monthly_kwh_val = getattr(optimizer_brain, "monthly_consumption_kwh", 0)
     return jsonify({
         # Thông số kỹ thuật
         "p_max": health_brain.p_max,
@@ -867,9 +908,13 @@ def get_params_api():
         # Ước lượng ngược lại số kWh từ giá (Chỉ mang tính tham khảo vì ta lưu giá chứ không lưu kWh)
         # Tuy nhiên để đơn giản, ở bước này ta có thể trả về 0 hoặc lưu monthly_kwh vào biến riêng nếu muốn hiển thị chính xác.
         # Ở đây tôi trả về giá trị mặc định để tránh lỗi JS
-        "monthly_kwh": 0, 
+        "monthly_kwh": monthly_kwh_val, 
         "alpha_p": optimizer_brain.alpha_p * 100 # Đổi lại về %
     })
+
+
+
+
 # --- ROUTES & SOCKET EVENTS ---
 @app.route('/')
 def home(): return render_template('home_page.html')
@@ -929,13 +974,13 @@ def handle_control(data):
     
     # 1. Kiểm tra chế độ
     if system_state['mode'] != 'MANUAL':
-        # ⛔ NẾU KHÔNG PHẢI THỦ CÔNG -> TỪ CHỐI
+        #  NẾU KHÔNG PHẢI THỦ CÔNG -> TỪ CHỐI
         print(f"⚠️ TỪ CHỐI LỆNH: Đang ở chế độ {system_state['mode']}")
         
         # Gửi thông báo ngược lại cho Web hiển thị
         emit('system_alert', {
             'level': 'warning', 
-            'message': f'⛔ KHÔNG THỂ ĐIỀU KHIỂN! Hệ thống đang ở chế độ {system_state["mode"]}. Hãy chuyển sang THỦ CÔNG.'
+            'message': f' KHÔNG THỂ ĐIỀU KHIỂN! Hệ thống đang ở chế độ {system_state["mode"]}. Hãy chuyển sang THỦ CÔNG.'
         })
         return # Thoát hàm, không thực hiện lệnh
 
@@ -1093,8 +1138,6 @@ def run_simulation():
 
 
 
-
-
 if __name__ == '__main__':
     # 1. Chạy luồng MQTT thực
     threading.Thread(target=run_mqtt, daemon=True).start()
@@ -1105,11 +1148,10 @@ if __name__ == '__main__':
         
 
 
-    # Render sẽ cấp cổng qua biến môi trường PORT, nếu không có thì dùng 5000
+    # Render sẽ cấp cổng qua biến môi trường PORT
     port = int(os.environ.get("PORT", 5000))
     
-    # Trên Render (Linux) phải dùng 0.0.0.0 để ra được internet
-    # Ở máy Duy (Windows) thì dùng 127.0.0.1 cho ổn định
+    
     host = "0.0.0.0" if os.environ.get("RENDER") else "127.0.0.1"
 
     print(f"🚀 ASPC đang 'cất cánh' tại http://{host}:{port}")

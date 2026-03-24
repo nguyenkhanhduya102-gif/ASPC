@@ -1,54 +1,68 @@
 # hotspot_engine.py
+import math
 
 class HotspotDetector:
     def __init__(self):
         self.consecutive_danger_count = 0
-
+        # Các hằng số Vật lý Nhiệt (Có thể tinh chỉnh theo datasheet của tấm pin)
+        self.NOCT = 45.0        # Nhiệt độ hoạt động định mức (Thường 45-47 độ C)
+        self.G_NOCT = 800.0     # Bức xạ chuẩn tại NOCT (W/m2)
+        
     def detect(self, t_panel, t_env, lux, p_actual, p_theory):
+        # 1. ƯỚC LƯỢNG BỨC XẠ (G) TỪ LUX
+        # Trong thực tế 100,000 Lux ~ 1000 W/m2 (Hệ số xấp xỉ 0.01)
+        g_irr = lux * 0.01 
         
-        # 1. Tính nhiệt độ lý thuyết (Physics-Informed)
-        # Tấm pin thường nóng hơn môi trường dựa trên cường độ bức xạ (Lux)
-        irradiance_ratio = lux / 80000.0 if lux > 0 else 0
-        t_ideal = t_env + (28.0 * irradiance_ratio) # 28°C là hằng số chênh lệch chuẩn NOCT
-        
+        # 2. BẢN SAO SỐ NHIỆT ĐỘNG LỰC HỌC (Thermodynamic Twin)
+        if g_irr > 50:
+            # Tính T_ideal theo mô hình vật lý NOCT
+            t_ideal_base = t_env + (g_irr / self.G_NOCT) * (self.NOCT - 20.0)
+            
+            # Tinh chỉnh: Năng lượng quang không thành điện -> Biến thành nhiệt
+            # Nếu P_actual sụt giảm, phần năng lượng đó đang bị đốt thành nhiệt cục bộ
+            power_loss_ratio = max(0, (p_theory - p_actual) / p_theory) if p_theory > 0 else 0
+            
+            # Phạt thêm nhiệt độ (Penalty) nếu có năng lượng bị kẹt lại
+            t_ideal = t_ideal_base + (power_loss_ratio * 3.0) 
+        else:
+            t_ideal = t_env
+            power_loss_ratio = 0.0
+            
         delta_t = t_panel - t_ideal
         
-        # 2. Tính độ sụt giảm hiệu suất thực tế
-        power_drop_ratio = 0.0
-        if p_theory > 0:
-            power_drop_ratio = max(0, (p_theory - p_actual) / p_theory)
-
-        # 3. Tính toán chỉ số rủi ro (Risk Score 0-100)
+        # 3. MA TRẬN CHẨN ĐOÁN LỖI (Diagnostic Matrix)
         risk = 0.0
-        if lux > 10000: # Chỉ phân tích khi có nắng
-            # Trọng số 70% nhiệt độ, 30% công suất
-            score_temp = min(max(delta_t, 0), 25.0) / 25.0 
-            score_power = min(power_drop_ratio, 0.6) / 0.6
-            risk = (score_temp * 70) + (score_power * 30)
+        status = "NORMAL"
+        reason = "Cân bằng nhiệt động lực học ổn định."
+        action = "Hệ thống hoạt động tối ưu."
+
+        if g_irr > 200: # Chỉ phân tích khi trời có nắng rõ
+            # Trọng số: Delta_T chiếm 60%, Sụt công suất chiếm 40%
+            score_temp = min(max(delta_t, 0), 20.0) / 20.0  # Max rủi ro ở 20 độ lệch
+            score_power = min(power_loss_ratio, 0.5) / 0.5  # Max rủi ro ở 50% sụt áp
+            risk = (score_temp * 60) + (score_power * 40)
 
         risk_percent = round(risk, 1)
 
-        # 4. Phân loại trạng thái và đưa ra chỉ dẫn Bảo trì dự báo
-        status = "NORMAL"
-        reason = "Hệ thống hoạt động ổn định."
-        action = "Tiếp tục giám sát."
-
+        # 4. CÂY QUYẾT ĐỊNH XỬ LÝ (Actionable AI)
         if risk_percent > 65:
             self.consecutive_danger_count += 1
             if self.consecutive_danger_count >= 3:
                 status = "DANGER"
-                # Phân loại nguyên nhân dựa trên dữ liệu
-                if power_drop_ratio < 0.25:
-                    reason = "Phát hiện tích tụ nhiệt cục bộ (Bụi bẩn/Vật cản nhẹ)."
-                    action = "Kích hoạt phun nước làm sạch bề mặt."
+                # Phân tách rõ ràng giữa Bụi bẩn và Lỗi phần cứng
+                if delta_t > 10.0 and power_loss_ratio > 0.3:
+                    reason = "🔥 NGUY HIỂM: Phát hiện Hotspot cốt lõi (Cell/Diode hỏng) gây tích nhiệt."
+                    action = "❌ Yêu cầu cô lập chuỗi pin. Gọi Drone/Kỹ thuật viên kiểm tra quang nhiệt."
                 else:
-                    reason = "Sụt giảm công suất nghiêm trọng (Nứt cell/Lỗi Diode)."
-                    action = "Cần kiểm tra kỹ thuật trực tiếp tại tấm pin."
+                    reason = "Bề mặt thất thoát hiệu suất do bụi bẩn tích tụ dày."
+                    action = "💦 Kích hoạt vòi phun nước rửa bề mặt."
+        
         elif risk_percent > 35:
             status = "WARNING"
-            reason = "Nhiệt độ hơi cao so với lý thuyết."
-            action = "Theo dõi thêm hoặc vệ sinh nhẹ."
+            reason = "Cảnh báo sớm: Lệch pha cân bằng nhiệt."
+            action = "Theo dõi thêm, chờ AI lập kế hoạch phun nước."
             self.consecutive_danger_count = 0
+            
         else:
             self.consecutive_danger_count = 0
 

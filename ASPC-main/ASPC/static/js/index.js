@@ -134,6 +134,9 @@ function updateChartData(currentTemp) {
     tempChart.update();
 }
 
+
+
+
 // --- 2. XỬ LÝ SOCKET (GIỮ NGUYÊN LOGIC CŨ) ---
 
 socket.on('sensor_data', (data) => {
@@ -144,7 +147,14 @@ socket.on('sensor_data', (data) => {
     if(data.health_score !== undefined) updateText('efficiency', data.health_score + '%');
     updatePumpStatusUI(data.pump_status, 'cool');
     // Chỉ cập nhật trạng thái bơm nếu KHÔNG CÓ lệnh điều khiển nào trong 3 giây qua
+// Đồng bộ hiển thị bụi từ hotspot pipeline mới
+    const dustEl = document.getElementById('dust-level');
+    if (dustEl) {
+        const dust = (typeof data.dust_level === 'number') ? data.dust_level : 0;
+        dustEl.textContent = `${dust.toFixed(1)}`;
+    }
 
+    updatePumpStatusUI(data.pump_status, 'cool');
     // GỌI HÀM VẼ BIỂU ĐỒ
     updateChartData(data.temp_panel);
 });
@@ -207,7 +217,7 @@ function setupControlButtons() {
     const btnCoolOn = document.getElementById('btn-cool-on');
     const btnCoolOff = document.getElementById('stop-cool-btn');
     
-    if(btnCoolOn) btnCoolOn.addEventListener('click', () => sendCommand('1', 'COOL'));
+    if(btnCoolOn) btnCoolOn.addEventListener('click', () => sendCommand('2', 'COOL'));
     if(btnCoolOff) btnCoolOff.addEventListener('click', () => sendCommand('0', 'COOL'));
     
     // Nếu có nút Clean (Rửa pin)
