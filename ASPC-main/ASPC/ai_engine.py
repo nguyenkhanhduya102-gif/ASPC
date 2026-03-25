@@ -11,23 +11,24 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score 
 
 class SolarLSTM:
-    def __init__(self, model_path='model_multivariate.h5', data_file='solar_data_multi.csv', scaler_file='scaler.pkl'):
-        self.model_path = model_path
-        self.data_file = data_file
-        self.scaler_file = scaler_file
+    def __init__(self, mac_address="default"):
+        self.mac_address = mac_address
+        
+        # Tạo tên file ĐỘC LẬP cho từng thiết bị
+        self.model_path = f'model_{self.mac_address}.h5'
+        self.data_file = f'data_{self.mac_address}.csv'
+        self.scaler_file = f'scaler_{self.mac_address}.pkl'
         
         self.model = None
         self.scaler = None
         
         #Cấu hình tối ưu cho hệ thống
-        
         self.window_size = 30 
-        
         self.num_features = 5 
         
         self.data_history = []     
         self.new_data_buffer = []  
-        self.RETRAIN_THRESHOLD = 100 # Gom nhiều dữ liệu hơn chút rồi mới học (cần lên tầm 1 tháng dữ liệu)
+        self.RETRAIN_THRESHOLD = 100 # Gom nhiều dữ liệu hơn chút rồi mới học
         self.MAX_TRAIN_SIZE = 20000 
         self.is_training = False 
         
@@ -36,6 +37,7 @@ class SolarLSTM:
 
         self.load_scaler()
         self.load_ai_model()
+        
 
     def load_scaler(self):
         if os.path.exists(self.scaler_file):

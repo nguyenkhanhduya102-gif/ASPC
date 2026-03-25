@@ -33,8 +33,11 @@ formLogin.addEventListener("submit" , function(e){
         localStorage.setItem('user_id', findUser.userId);
     
     // Lưu một device_id mặc định (nếu bạn chưa có logic chọn thiết bị)
-    // Hoặc có thể đặt là device_default như trong index.js
-        localStorage.setItem('device_id', 'device_default');
+   
+        // Thay vì lưu 'device_default', hãy lưu đúng mã mà server đang nhận mặc định
+        calStorage.setItem('device_id', 'ESP32_DEFAULT'); // Tạm thời để mặc định, sau này có thể là ESP32_001
+        
+
         
         
         // Chuyển về trang chủ

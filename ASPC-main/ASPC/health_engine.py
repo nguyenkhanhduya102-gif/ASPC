@@ -7,43 +7,41 @@ from sklearn.linear_model import LinearRegression
 CALIB_FILE = 'calibration.json'
 
 class SolarHealthEngine:
-    def __init__(self):
-        # Giá trị mặc định (sẽ bị ghi đè nếu có file save)
-        self.p_max = 100.0   # Công suất danh định (Watt)
-        self.area = 1.0      # Diện tích (m2) - Dùng để tính hiệu suất quang điện nếu cần
+    def __init__(self, mac_address="default"):
+        self.mac_address = mac_address
+        # Tên file lưu cấu hình RIÊNG cho từng thiết bị
+        self.calib_file = f'calib_{self.mac_address}.json'
         
-        # Các tham số tự học
+        # Giá trị mặc định
+        self.p_max = 100.0   
+        self.area = 1.0      
+        
         self.k_factor = 0.00015 
         self.a = 0.0
         self.b = 0.0
         self.use_regression = False
         
-        # Bộ đệm training
         self.training_buffer_lux = [] 
         self.training_buffer_G = []
         
         self.load_calibration()
 
     def load_calibration(self):
-        """Đọc toàn bộ thông số (User cài đặt + AI học được)"""
-        if os.path.exists(CALIB_FILE):
+        """Đọc toàn bộ thông số của riêng thiết bị này"""
+        if os.path.exists(self.calib_file):
             try:
-                with open(CALIB_FILE, 'r') as f:
+                with open(self.calib_file, 'r') as f:
                     data = json.load(f)
-                    # Load thông số người dùng nhập
                     self.p_max = float(data.get('p_max', 100.0))
                     self.area = float(data.get('area', 1.0))
-                    
-                    # Load thông số AI học
                     self.k_factor = data.get('k', 0.00015)
                     self.a = data.get('a', 0.0)
                     self.b = data.get('b', 0.0)
                     self.use_regression = data.get('use_regression', False)
-                    print(f"✅ Health Engine: Đã load cấu hình (Pmax={self.p_max}W, Area={self.area}m2)")
             except: pass
 
     def save_calibration(self):
-        """Lưu tất cả xuống file"""
+        """Lưu cấu hình riêng cho thiết bị này"""
         data = {
             'p_max': self.p_max,
             'area': self.area,
@@ -52,7 +50,7 @@ class SolarHealthEngine:
             'b': self.b,
             'use_regression': self.use_regression
         }
-        with open(CALIB_FILE, 'w') as f:
+        with open(self.calib_file, 'w') as f:
             json.dump(data, f)
 
     def update_user_params(self, p_max, area):

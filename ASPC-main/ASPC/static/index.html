@@ -29,7 +29,7 @@
         <button onclick="document.getElementById('system-alert-box').style.display='none'" style="background:none; border:none; color:inherit; font-size:20px; cursor:pointer;">&times;</button>
     </div>
 </div>
-<!--Thanh navba-->
+<!--Thanh navbar-->
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
   <div class="container-fluid">
     <a class="navbar-brand" href="/">A S P C</a>
@@ -45,6 +45,22 @@
         <li class="nav-item"><a class="nav-link" href="./weather.html">Dự Báo Thời Tiết</a> </li>
         <li class="nav-item"><a class="nav-link" href="./hotspot.html">Điểm Nóng</a></li>
       </ul>
+
+      <!-- BẮT ĐẦU: KHU VỰC CHỌN TRẠM BÊN PHẢI -->
+      <div class="d-flex align-items-center ms-auto">
+          <div class="input-group bg-dark rounded border border-secondary" style="max-width: 250px;">
+              <span class="input-group-text bg-transparent border-0 text-light">
+                  <i class="fas fa-satellite-dish text-success"></i>
+              </span>
+              <select id="station-selector" class="form-select bg-dark text-light border-0 shadow-none" onchange="changeStation(this.value)" style="cursor: pointer;">
+                  <option value="ESP32_DEFAULT">Trạm Sài Gòn (Mặc định)</option>
+                  <option value="ESP32_DALAT_01">Trạm Đà Lạt 01</option>
+                  <option value="ESP32_HANOI_01">Trạm Hà Nội 01</option>
+              </select>
+          </div>
+      </div>
+      <!-- KẾT THÚC: KHU VỰC CHỌN TRẠM -->
+
     </div>
   </div>
 </nav>
@@ -243,6 +259,25 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script src="{{ url_for('static', filename='js/index.js') }}"></script>
+<!-- Script xử lý chuyển đổi Trạm -->
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // 1. Khi load trang, hiển thị đúng trạm đang lưu trong máy
+        const savedMac = localStorage.getItem('device_id') || 'ESP32_DEFAULT';
+        const selector = document.getElementById('station-selector');
+        if(selector) {
+            selector.value = savedMac;
+        }
+    });
 
+    // 2. Hàm được gọi khi người dùng bấm chọn trạm khác
+    function changeStation(macAddress) {
+        // Lưu mã trạm mới vào bộ nhớ
+        localStorage.setItem('device_id', macAddress);
+        
+        // Tải lại trang để toàn bộ JS (index.js, weather.js...) lấy mã mới và gọi lại Server
+        window.location.reload();
+    }
+</script>
 </body>
 </html>

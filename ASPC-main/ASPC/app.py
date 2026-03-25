@@ -30,6 +30,8 @@ from collections import deque
 from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 import paho.mqtt.client as mqtt
+from models import db, User, Station, Device, SensorData,CommandHistory
+from sqlalchemy import func, extract
 from ai_engine import SolarLSTM 
 from health_engine import SolarHealthEngine
 from optimizer import SolarOptimizer
@@ -92,10 +94,29 @@ ALERT_THRESHOLDS = {
     "lux_max": 150000         # Lux (cảm biến lỗi)
 }
 
+
+
+
+#Sử dụng database mới
 app = Flask(__name__, static_folder='static', template_folder='static')
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default-secret-key-please-change')
+
+# BẮT ĐẦU THÊM CẤU HÌNH SQLALCHEMY 
+basedir = os.path.abspath(os.path.dirname(__file__))
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'aspc_production.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app)
+
+# Tạo các bảng tự động dựa trên models.py
+with app.app_context():
+    db.create_all()
+    print(" Đã khởi tạo Database Multi-tenant!")
+# KẾT THÚC THÊM CẤU HÌNH 
 # Windows-friendly: tránh phụ thuộc eventlet/gevent gây lỗi khó đoán
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+
+
 
 
 
@@ -124,49 +145,61 @@ def _find_free_port(host: str, start_port: int, max_tries: int = 30) -> int:
 
 
 # DATABASE & AI
-def init_db():
-    try:
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute('''CREATE TABLE IF NOT EXISTS history
-                     (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                      timestamp TEXT, 
-                      user_id TEXT, 
-                      command TEXT, 
-                      action_type TEXT, 
-                      source TEXT)''')
-        # Table lưu lịch sử dài hạn 
-        c.execute('''
-        CREATE TABLE IF NOT EXISTS sensor_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp TEXT,
-            temp_panel REAL,
-            temp_env REAL,
-            humidity REAL,
-            lux REAL,
-            power REAL,
-            pump_status INTEGER,
-            current REAL,
-            voltage REAL,
-            health_score REAL,
-            profit REAL,
-            delta_e REAL
-        )
-    ''')
+# def init_db():
+#     try:
+#         conn = sqlite3.connect(DB_NAME)
+#         c = conn.cursor()
+#         c.execute('''CREATE TABLE IF NOT EXISTS history
+#                      (id INTEGER PRIMARY KEY AUTOINCREMENT,
+#                       timestamp TEXT, 
+#                       user_id TEXT, 
+#                       command TEXT, 
+#                       action_type TEXT, 
+#                       source TEXT)''')
+#         # Table lưu lịch sử dài hạn 
+#         c.execute('''
+#         CREATE TABLE IF NOT EXISTS sensor_history (
+#             id INTEGER PRIMARY KEY AUTOINCREMENT,
+#             timestamp TEXT,
+#             temp_panel REAL,
+#             temp_env REAL,
+#             humidity REAL,
+#             lux REAL,
+#             power REAL,
+#             pump_status INTEGER,
+#             current REAL,
+#             voltage REAL,
+#             health_score REAL,
+#             profit REAL,
+#             delta_e REAL
+#         )
+#     ''')
         
-        conn.commit()
-        conn.close()
-    except: pass
+#         conn.commit()
+#         conn.close()
+#     except: pass
+# init_db() 
 
-init_db()
-print(" Đang khởi tạo AI Engine...")
-ai_brain = SolarLSTM()
-print(" Đang khởi tạo Health Engine...")
-health_brain = SolarHealthEngine()
-print(" Đang khởi tạo Optimizer Engine...")
-optimizer_brain = SolarOptimizer()
-print("Đang khởi tạo hotspot...")
-hotspot_brain = HotspotDetector()
+
+
+
+print(" Đang khởi tạo hệ thống AI/Logic Engine Multi-tenant...")
+
+# Dictionary lưu trữ các engine cho từng thiết bị
+device_engines = {}
+
+def get_engines(mac_address):
+    """Lấy hoặc tạo mới bộ não cho thiết bị cụ thể"""
+    if mac_address not in device_engines:
+        print(f"⚙️ Khởi tạo bộ máy AI & Logic cho thiết bị: {mac_address}")
+        device_engines[mac_address] = {
+            "ai": SolarLSTM(mac_address=mac_address),
+            "health": SolarHealthEngine(mac_address=mac_address),
+            "optimizer": SolarOptimizer(), # Optimizer không lưu file nên dùng mặc định
+            "hotspot": HotspotDetector()   # Hotspot chỉ tính toán tức thời nên dùng mặc định
+        }
+    return device_engines[mac_address]
+
 
 class WeatherCache:
     def __init__(self, ttl_seconds: int = 600):
@@ -361,67 +394,76 @@ class EnergyManager:
             "total_real_kwh_today": round(self.e_real_today / 1000, 3)
         }
 
+
+
+
+
+
+
 # Khởi tạo Global
 energy_manager = EnergyManager()
 # DATABASE HELPERS 
 def save_history(user, cmd, action_type, source):
     try:
-        now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        conn = sqlite3.connect(DB_NAME)
-        c = conn.cursor()
-        c.execute("INSERT INTO history (timestamp, user_id, command, action_type, source) VALUES (?, ?, ?, ?, ?)",
-                  (now, user, cmd, action_type, source))
-        conn.commit()
-        conn.close()
-    except: pass
+        with app.app_context():
+            new_record = CommandHistory(
+                user_id=str(user),
+                command=str(cmd),
+                action_type=str(action_type),
+                source=str(source)
+            )
+            db.session.add(new_record)
+            db.session.commit()
+    except Exception as e: 
+        print(f"Lỗi lưu history: {e}")
 
 # Hàng đợi để lưu 5 giá trị nhiệt độ gần nhất
-temp_history = deque(maxlen=5) 
+temp_history = deque(maxlen=5)
 
-#xuất báo cáo theo tháng
+# xuất báo cáo theo tháng
 def get_monthly_report(year, month):
-    """Xuất báo cáo kinh tế và sức khỏe theo tháng"""
     try:
-        conn = sqlite3.connect(DB_NAME)
-        cursor = conn.cursor()
+        with app.app_context():
+            econ_result = db.session.query(
+                func.sum(SensorData.profit), 
+                func.sum(SensorData.delta_e)
+            ).filter(
+                extract('year', SensorData.timestamp) == year,
+                extract('month', SensorData.timestamp) == month
+            ).first()
 
-        cursor.execute('''
-            SELECT SUM(profit), SUM(delta_e)
-            FROM sensor_history
-            WHERE strftime('%Y', timestamp) = ? AND strftime('%m', timestamp) = ?
-        ''', (str(year), f"{month:02d}"))
-        econ_result = cursor.fetchone()
+            health_result = db.session.query(
+                func.avg(SensorData.health_score), 
+                func.count(SensorData.id)
+            ).filter(
+                extract('year', SensorData.timestamp) == year,
+                extract('month', SensorData.timestamp) == month
+            ).first()
 
-        cursor.execute('''
-            SELECT AVG(health_score), COUNT(*)
-            FROM sensor_history
-            WHERE strftime('%Y', timestamp) = ? AND strftime('%m', timestamp) = ?
-        ''', (str(year), f"{month:02d}"))
-        health_result = cursor.fetchone()
+            total_profit = econ_result[0] or 0 if econ_result else 0
+            total_energy_saved = econ_result[1] or 0 if econ_result else 0
+            avg_health = health_result[0] or 0 if health_result else 0
+            total_records = health_result[1] or 0 if health_result else 0
 
-        conn.close()
-
-        total_profit = (econ_result[0] or 0) if econ_result else 0
-        total_energy_saved = (econ_result[1] or 0) if econ_result else 0
-        avg_health = (health_result[0] or 0) if health_result else 0
-        total_records = (health_result[1] or 0) if health_result else 0
-
-        return {
-            "month": f"{year}-{month:02d}",
-            "economic": {
-                "total_profit": total_profit,
-                "total_energy_saved": total_energy_saved
-            },
-            "health": {
-                "avg_health_score": avg_health,
-                "total_records": total_records,
-                "good_days": 0,
-                "bad_days": total_records
+            return {
+                "month": f"{year}-{month:02d}",
+                "economic": {
+                    "total_profit": total_profit,
+                    "total_energy_saved": total_energy_saved
+                },
+                "health": {
+                    "avg_health_score": round(avg_health, 2),
+                    "total_records": total_records,
+                    "good_days": 0,
+                    "bad_days": total_records
+                }
             }
-        }
     except Exception as e:
         print(f"Lỗi xuất báo cáo: {e}")
         return {"error": str(e)}
+
+
+
 
 def get_smooth_temp(raw_temp):
     temp_history.append(raw_temp)
@@ -516,10 +558,16 @@ def check_protection_alerts(temp_panel, temp_env, humidity, lux, power, pump_sta
 
 
 #  [LOGIC QUAN TRỌNG] KIỂM TRA & RA QUYẾT ĐỊNH 
-def check_system_decision(temp_panel , lux ,p_max, pump_status):
+def check_system_decision(mac_address,temp_panel , lux ,p_max, pump_status):
     global system_state
     current_time = time.time()
-    
+
+#Lấy bộ não trong hàm ra sử dụng
+    engines = get_engines(mac_address)
+    ai_brain = engines["ai"]
+    health_brain = engines["health"]
+    optimizer_brain = engines["optimizer"]
+
     # 1. Dự báo nhiệt độ cơ bản (cho Auto/Manual cũ)
     ai_result = ai_brain.predict()
     pred_temp_basic = ai_result['pred_temp_5min'] if ai_result else temp_panel
@@ -663,6 +711,17 @@ def on_message(client, userdata, msg):
         print(f"📥 ESP32 Payload: {raw_msg}") 
         
         data = json.loads(raw_msg)
+#  BẮT ĐẦU THÊM MỚI 
+        # Lấy mã thiết bị, nếu không có thì mặc định là ESP32_DEFAULT
+        mac_address = data.get("mac_address", "ESP32_DEFAULT")
+        
+        # Gọi "bộ não" tương ứng của thiết bị này ra
+        engines = get_engines(mac_address)
+        ai_brain = engines["ai"]
+        health_brain = engines["health"]
+        optimizer_brain = engines["optimizer"]
+        hotspot_brain = engines["hotspot"]
+        #  KẾT THÚC THÊM MỚI 
 
         current = data.get("current", None)  # A (dòng điện)
         voltage = data.get("voltage", None)  # V (điện áp)
@@ -670,13 +729,14 @@ def on_message(client, userdata, msg):
 
         # 1. ÉP KIỂU DỮ LIỆU AN TOÀN (Tránh lỗi String/None)
         # Xử lý Nhiệt độ (Có lọc nhiễu)
-        raw_temp_panel = data.get('temp_panel', 0)
+        raw_temp_panel = float(data.get('temp_panel', 0) or 0)
         temp_panel = get_smooth_temp(raw_temp_panel) # Dùng giá trị đã làm mượt
         
-        temp_env = float(data.get('temp_env', 0))
-        humidity = float(data.get('humidity', 0))
-        lux = float(data.get('lux_ref', 0))
-        p_actual_W = float(data.get('power', 0))
+        temp_env = float(data.get('temp_env', 0) or 0)
+        humidity = float(data.get('humidity', 0) or 0)
+        lux = float(data.get('lux_ref', data.get('lux' , 0)) or 0)
+        pump_status = int(data.get('pump_status', 0) or 0)
+        p_actual_W = float(data.get('power', 0) or 0)
 
 
         
@@ -712,6 +772,10 @@ def on_message(client, userdata, msg):
             # Nếu chỉ trả về 2 giá trị (Phiên bản cũ hoặc lỗi)
             health_score, g_meas = health_result if len(health_result) >= 2 else (0, 0)
             p_theory_val = 0 # Gán mặc định để không bị crash
+
+
+
+
         # Lấy tham số từ Optimizer và Health Engine
         p_max_current = health_brain.p_max
         alpha_p = optimizer_brain.alpha_p
@@ -722,31 +786,45 @@ def on_message(client, userdata, msg):
         stats = energy_manager.get_stats(elec_price)      
         socketio.emit('efficiency_data', stats)
 
+         # BẮT ĐẦU ĐOẠN LƯU DATABASE MỚI 
         try:
-            conn = sqlite3.connect(DB_NAME)
-            c = conn.cursor()
-            c.execute('''
-                INSERT INTO sensor_history (timestamp, temp_panel, temp_env, humidity, lux, power, pump_status, current, voltage, health_score, profit, delta_e)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                datetime.datetime.now().isoformat(),
-                temp_panel,
-                temp_env,
-                humidity,
-                lux,
-                p_actual_W,
-                pump_status,
-                current,
-                voltage,
-                health_result[0] if isinstance(health_result, tuple) else 0,  # health_score
-                stats.get('y_today_vnd', 0),  # Từ energy_manager
-                stats.get('x_today_kwh', 0)   # Từ energy_manager
-            ))
-            conn.commit()
-            conn.close()
+            with app.app_context():
+                # Tìm hoặc tạo thiết bị mặc định (để hệ thống cũ vẫn chạy được)
+                default_device = Device.query.first()
+                if not default_device:
+                    # Khởi tạo dữ liệu mẫu nếu DB trống
+                    user = User(username="admin", password_hash="123456")
+                    db.session.add(user)
+                    db.session.commit()
+                    
+                    station = Station(user_id=user.id, name="Trạm Mặc Định")
+                    db.session.add(station)
+                    db.session.commit()
+                    
+                    default_device = Device(station_id=station.id, mac_address="ESP32_DEFAULT")
+                    db.session.add(default_device)
+                    db.session.commit()
+
+                # Thêm dòng dữ liệu mới
+                new_data = SensorData(
+                    device_id=default_device.id,
+                    temp_panel=temp_panel,
+                    temp_env=temp_env,
+                    humidity=humidity,
+                    lux=lux,
+                    power=p_actual_W,
+                    pump_status=pump_status,
+                    current=current,
+                    voltage=voltage,
+                    health_score=health_result[0] if isinstance(health_result, tuple) else 0,
+                    profit=stats.get('y_today_vnd', 0),
+                    delta_e=stats.get('x_today_kwh', 0)
+                )
+                db.session.add(new_data)
+                db.session.commit()
         except Exception as e:
             print(f"Lỗi lưu sensor history: {e}")
-
+        # KẾT THÚC ĐOẠN LƯU DATABASE MỚI 
 
 
         # Cập nhật AI (Dùng nhiệt độ đã làm mượt để AI không bị loạn)
@@ -754,6 +832,7 @@ def on_message(client, userdata, msg):
         ai_brain.update_data(data_package)
         # Kiểm tra logic điều khiển (Gửi temp_panel đã mượt vào)
         check_system_decision(
+            mac_address,
             temp_panel, 
             lux, 
             health_brain.p_max
@@ -839,7 +918,11 @@ def run_mqtt():
 def save_params_api():
     try:
         data = request.get_json(silent=True) or {}
-        
+        # Thêm lệnh để lấy bộ não ra
+        mac_address = data.get('mac_address', 'ESP32_DEFAULT')
+        engines = get_engines(mac_address)
+        health_brain = engines["health"]
+        optimizer_brain = engines["optimizer"]
         # 1. Thông số kỹ thuật
         p_max = data.get('p_max' , None)
         area = data.get('area' , None)
@@ -895,6 +978,11 @@ def get_weather_api():
 # [API MỚI] Lấy thông số hiện tại để hiển thị lên form
 @app.route('/api/get_params', methods=['GET'])
 def get_params_api():
+    # Thêm 4 dòng để lấy bộ não ra
+    mac_address = request.args.get('mac_address', 'ESP32_DEFAULT')
+    engines = get_engines(mac_address)
+    health_brain = engines["health"]
+    optimizer_brain = engines["optimizer"]
     monthly_kwh_val = getattr(optimizer_brain, "monthly_kwh", None)
     if monthly_kwh_val is None:
         monthly_kwh_val = getattr(optimizer_brain, "monthly_consumption_kwh", 0)
@@ -926,15 +1014,26 @@ def health(): return render_template('health.html')
 def history(): return render_template('history.html')
 @app.route('/parameter.html')
 def parameter(): return render_template('parameter.html')
+
 @app.route('/api/get_history')
 def get_history_api():
     try:
-        conn = sqlite3.connect(DB_NAME)
-        conn.row_factory = sqlite3.Row
-        c = conn.cursor()
-        c.execute("SELECT * FROM history ORDER BY id DESC LIMIT 50")
-        return json.dumps([dict(row) for row in c.fetchall()])
-    except: return "[]"
+        records = CommandHistory.query.order_by(CommandHistory.id.desc()).limit(50).all()
+        data = []
+        for r in records:
+            data.append({
+                "id": r.id,
+                "timestamp": r.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+                "user_id": r.user_id,
+                "command": r.command,
+                "action_type": r.action_type,
+                "source": r.source
+            })
+        return jsonify(data)
+    except Exception as e: 
+        return jsonify([])
+
+
 @app.route('/hotspot.html')
 def hotspot_page(): 
     return render_template('hotspot.html')

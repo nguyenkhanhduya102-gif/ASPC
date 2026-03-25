@@ -4,6 +4,7 @@
  */
 
 const socket = io();
+const currentDeviceMac = localStorage.getItem('device_id') || 'ESP32_DEFAULT';
 let currentMode = 'MANUAL'; 
 let lastControlTime = 0;
 // --- KHAI BÁO BIẾN DỮ LIỆU ---
@@ -17,7 +18,7 @@ let latestAiPred = null;
 
 document.addEventListener("DOMContentLoaded", function () {
     initChart();
-    socket.emit('request_current_mode');
+    socket.emit('request_current_mode', { mac_address: currentDeviceMac });
     setupControlButtons();
 });
 
@@ -208,7 +209,7 @@ document.querySelectorAll('input[name="sys_mode"]').forEach((elem) => {
         let mode = "MANUAL";
         if (event.target.id === "mode_auto") mode = "AUTO";
         else if (event.target.id === "mode_smart") mode = "SMART_ECO";
-        socket.emit('switch_mode', { mode: mode });
+        socket.emit('switch_mode', {mac_address: currentDeviceMac, mode: mode });
     });
 });
 
@@ -234,7 +235,7 @@ function sendCommand(cmd, type) {
     }
 
     // 1. Gửi lệnh đi
-    socket.emit('send_control', { command: cmd, type: type, user_id: 'WEB' });
+    socket.emit('send_control', {mac_address: currentDeviceMac, command: cmd, type: type, user_id: 'WEB' });
     // B. [QUAN TRỌNG] Cập nhật giao diện NGAY LẬP TỨC (Không chờ Server)
     // Nếu cmd = '2' (Bật) -> Trạng thái giả lập là 1
     // Nếu cmd = '0' (Tắt) -> Trạng thái giả lập là 0

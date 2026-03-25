@@ -5,7 +5,7 @@
  * 2. Gửi thông số về Server qua API /api/save_params để lưu vào calibration.json
  * 3. Validate dữ liệu trước khi gửi để tránh làm lỗi Health Engine.
  */
-
+const currentDeviceMac = localStorage.getItem('device_id') || 'ESP32_DEFAULT';
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Tải thông số ngay khi vào trang
     loadSettingsFromAPI();
@@ -28,7 +28,7 @@ function loadSettingsFromAPI() {
     // Hiển thị trạng thái đang tải (Optional UI polish)
     console.log("Đang tải cấu hình từ Server...");
 
-    fetch('/api/get_params')
+    fetch(`/api/get_params?mac_address=${currentDeviceMac}`)
         .then(response => {
             if (!response.ok) throw new Error("Server phản hồi lỗi!");
             return response.json();
@@ -88,9 +88,13 @@ function saveSettingsToAPI() {
 
     // Gửi về Server
     fetch('/api/save_params', {
+
         method: 'POST',
+
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
+
+            mac_address: currentDeviceMac,
             p_max: pMaxVal, 
             area: areaVal,
             
