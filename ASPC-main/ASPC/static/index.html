@@ -3,281 +3,356 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trang Quản Lý Hệ Thống Phun Nước</title>
+    <title>ASPC Pro Dashboard</title>
     
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style_index.css') }}">
+    <!-- Các thư viện Core -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Socket.io và Chart.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js" defer></script>
-    
     <style>
-        @keyframes slideDown { from {top: -100px;} to {top: 20px;} }
+        /* CẤU TRÚC LAYOUT  */
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #1e293b; overflow-x: hidden; }
         
-        .mode-btn-group .btn-check:checked + .btn {
-            font-weight: bold;
-            box-shadow: 0 0 10px rgba(0,0,0,0.2);
-        }
+        /* Sidebar */
+        #sidebar { min-width: 250px; max-width: 250px; background-color: #0f172a; min-height: 100vh; transition: all 0.3s; position: fixed; z-index: 1000; }
+        #sidebar.collapsed { min-width: 80px; max-width: 80px; }
+        #sidebar .sidebar-header { padding: 20px; color: white; border-bottom: 1px solid #1e293b; text-align: center; height: 70px; display: flex; align-items: center; justify-content: center;}
+        #sidebar.collapsed .logo-text { display: none; }
+        
+        #sidebar ul.components { padding: 20px 0; }
+        #sidebar ul li a { padding: 15px 20px; display: block; color: #94a3b8; text-decoration: none; display: flex; align-items: center; transition: 0.2s;}
+        #sidebar ul li a:hover, #sidebar ul li.active > a { color: #fff; background: #1e293b; border-left: 4px solid #3b82f6; }
+        #sidebar ul li a i { margin-right: 15px; font-size: 1.2rem; width: 20px; text-align: center; }
+        #sidebar.collapsed ul li a span { display: none; }
+        
+        /* Content Area */
+        #content { width: calc(100% - 250px); margin-left: 250px; transition: all 0.3s; min-height: 100vh; }
+        #sidebar.collapsed + #content { width: calc(100% - 80px); margin-left: 80px; }
+        
+        /* Topbar */
+        .top-header { background: #fff; height: 70px; padding: 0 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 999; }
+        .btn-toggle { background: transparent; border: none; font-size: 1.3rem; color: #64748b; cursor: pointer; padding: 5px 10px; border-radius: 5px; }
+        .btn-toggle:hover { background: #f1f5f9; color: #0f172a; }
+        .station-select { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 12px; font-weight: 600; color: #334155; font-size: 0.9rem;}
+        
+        /*  UI COMPONENTS  */
+        /* Thẻ thống kê (Card) */
+        .stat-card { background: #fff; border-radius: 12px; padding: 20px; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.02); display: flex; align-items: center; margin-bottom: 20px; transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        .stat-icon { width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-right: 15px; }
+        .stat-content p { margin: 0; font-size: 0.85rem; color: #64748b; font-weight: 500; text-transform: uppercase;}
+        .stat-content h4 { margin: 0; font-size: 1.5rem; font-weight: 700; color: #0f172a; margin-top: 5px;}
+        
+        /* Màu icon thống kê */
+        .icon-temp { background: #fff0f2; color: #ef4444; }
+        .icon-lux { background: #fffbeb; color: #f59e0b; }
+        .icon-dust { background: #f1f5f9; color: #475569; }
+        .icon-health { background: #f0fdf4; color: #22c55e; }
+
+        /* Vùng Chart và Control */
+        .panel-box { background: #fff; border-radius: 12px; padding: 20px; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.02); margin-bottom: 20px;}
+        .panel-title { font-size: 1.1rem; font-weight: 600; color: #0f172a; margin-bottom: 20px; display: flex; align-items: center; }
+        .panel-title i { margin-right: 10px; color: #3b82f6; }
+
+        /* Nút chế độ (Radio group) */
+        .mode-selector { display: flex; gap: 10px; margin-bottom: 15px; }
+        .mode-btn { flex: 1; text-align: center; }
+        .mode-btn input[type="radio"] { display: none; }
+        .mode-btn label { display: block; padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; cursor: pointer; font-weight: 500; color: #64748b; transition: all 0.2s;}
+        .mode-btn input[type="radio"]:checked + label { background: #eff6ff; border-color: #3b82f6; color: #1d4ed8; font-weight: 600; box-shadow: inset 0 0 0 1px #3b82f6;}
+
+        /* Nút điều khiển Bơm */
+        .control-btn { width: 100%; padding: 12px; border-radius: 8px; font-weight: 600; font-size: 1rem; border: none; margin-bottom: 10px; transition: all 0.2s; }
+        .btn-on { background: #22c55e; color: white; }
+        .btn-on:hover { background: #16a34a; }
+        .btn-off { background: #ef4444; color: white; }
+        .btn-off:hover { background: #dc2626; }
+        .btn-on:disabled, .btn-off:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Badge Trạng thái */
+        .status-badge { display: inline-block; padding: 5px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 600; }
+        .status-running { background: #dcfce7; color: #166534; }
+        .status-stopped { background: #f1f5f9; color: #475569; }
+
+        /* Toast thông báo */
+        #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 1050; }
     </style>
 </head>
 <body>
-<div id="system-alert-box" class="alert" role="alert" style="display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); width: 80%; max-width: 600px; z-index: 9999;"></div>
-    <div style="display: flex; align-items: center; justify-content: space-between; padding: 15px 20px;">
-        <div style="display: flex; align-items: center;">
-            <i id="alert-icon" class="fas fa-exclamation-triangle" style="font-size: 24px; margin-right: 15px;"></i>
-            <span id="alert-message" style="font-size: 16px; font-weight: bold;">Thông báo hệ thống...</span>
+
+    <!-- THÔNG BÁO GÓC MÀN HÌNH  -->
+    <div id="toast-container"></div>
+
+    <!-- SIDEBAR -->
+    <nav id="sidebar">
+        <div class="sidebar-header">
+            <h3 class="logo-text fw-bold m-0"><i class="fas fa-solar-panel text-primary"></i> ASPC</h3>
         </div>
-        <button onclick="document.getElementById('system-alert-box').style.display='none'" style="background:none; border:none; color:inherit; font-size:20px; cursor:pointer;">&times;</button>
-    </div>
-</div>
-<!--Thanh navbar-->
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="/">A S P C</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarSupportedContent">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        <li class="nav-item"><a class="nav-link active" href="./index.html">Dashboard</a></li>
-        <li class="nav-item"><a class="nav-link" href="./history.html">Lịch Sử</a></li>
-        <li class="nav-item"><a class="nav-link" href="./parameter.html">Thông Số</a></li>
-        <li class="nav-item"><a class="nav-link" href="./health.html">Sức Khỏe</a></li>
-        <li class="nav-item"><a class="nav-link" href="./weather.html">Dự Báo Thời Tiết</a> </li>
-        <li class="nav-item"><a class="nav-link" href="./hotspot.html">Điểm Nóng</a></li>
-      </ul>
+        <ul class="list-unstyled components">
+            <li class="active"><a href="index.html"><i class="fas fa-th-large"></i> <span>Tổng Quan</span></a></li>
+            <li><a href="weather.html"><i class="fas fa-cloud-sun-rain"></i> <span>Dự Báo Thời Tiết</span></a></li>
+            <li><a href="health.html"><i class="fas fa-heartbeat"></i> <span>Sức Khỏe Pin</span></a></li>
+            <li><a href="hotspot.html"><i class="fas fa-fire"></i> <span>Điểm Nóng AI</span></a></li>
+            <li><a href="history.html"><i class="fas fa-history"></i> <span>Lịch Sử Lệnh</span></a></li>
+            <li><a href="parameter.html"><i class="fas fa-cog"></i> <span>Cấu Hình</span></a></li>
+        </ul>
+    </nav>
 
-      <!-- BẮT ĐẦU: KHU VỰC CHỌN TRẠM BÊN PHẢI -->
-      <div class="d-flex align-items-center ms-auto">
-          <div class="input-group bg-dark rounded border border-secondary" style="max-width: 250px;">
-              <span class="input-group-text bg-transparent border-0 text-light">
-                  <i class="fas fa-satellite-dish text-success"></i>
-              </span>
-              <select id="station-selector" class="form-select bg-dark text-light border-0 shadow-none" onchange="changeStation(this.value)" style="cursor: pointer;">
-                  <option value="ESP32_DEFAULT">Trạm Sài Gòn (Mặc định)</option>
-                  <option value="ESP32_DALAT_01">Trạm Đà Lạt 01</option>
-                  <option value="ESP32_HANOI_01">Trạm Hà Nội 01</option>
-              </select>
-          </div>
-      </div>
-      <!-- KẾT THÚC: KHU VỰC CHỌN TRẠM -->
-
-    </div>
-  </div>
-</nav>
-<!--Thanh nacbav-->
-
-<!--Cấu hình-->
-<main class="container pt-5 mt-5">
-
-    <div id="settings-screen" class="section-card hidden" style="display:none; margin-bottom: 20px;">
-        <h2><i class="fas fa-cogs"></i> Cài Đặt Kết Nối</h2>
-        <div class="auth-form" style="box-shadow: none; margin: 0; padding: 0;">
-            <label class="metric-label">ID Người dùng:</label>
-            <input type="text" id="settings-user-id" class="form-control mb-2" placeholder="user_001">
-            <label class="metric-label">ID Thiết bị:</label>
-            <input type="text" id="settings-device-id" class="form-control mb-3" placeholder="device_A">
-            <button onclick="saveSettings()" class="btn btn-primary w-100"><i class="fas fa-save"></i> Lưu & Kết nối lại</button>
-        </div>
-    </div>
-<!--Cấu hình-->
-
-<!--Dashboard-->
-    <div id="dashboard-screen"> 
-        <div style="text-align: center" class="status-indicator mb-3">
-            <span id="mqtt-status-dot" class="status-dot disconnected"></span>
-            Trạng thái Server: <span id="mqtt-status-text">Ngắt kết nối</span>
-        </div>
-
-        <section class="data-display section-card mb-4">
-            <h2><i class="fas fa-thermometer-three-quarters"></i> Dữ Liệu Hiện Tại</h2>
-            <div class="metrics-grid">
-                <div class="metric-card">
-                    <div class="icon-circle"><i class="fas fa-temperature-low"></i></div>
-                    <div>
-                        <p class="metric-label">Nhiệt Độ Môi Trường</p>
-                        <p class="metric-value" id="current-temp">-- °C</p>
-                    </div>
-                </div>
-
-                <div class="metric-card">
-                    <div class="icon-circle" style="color: #17a2b8; background-color: rgba(23, 162, 184, 0.1);"><i class="fas fa-water"></i></div>
-                    <div>
-                        <p class="metric-label">Độ Ẩm Môi Trường</p>
-                        <p class="metric-value" id="humidity">-- %</p>
-                    </div>
-                </div>
-
-                <div class="metric-card">
-                    <div class="icon-circle" style="color: #ffc107; background-color: rgba(255, 193, 7, 0.1);"><i class="fas fa-sun"></i></div>
-                    <div>
-                        <p class="metric-label">Cường Độ Ánh Sáng</p>
-                        <p class="metric-value" id="light-intensity">-- Lux</p>
-                    </div>
-                </div>
-
-                <div class="metric-card">
-                    <div class="icon-circle" style="color: #ff9800; background-color: rgba(255, 152, 0, 0.1);"><i class="fas fa-solar-panel"></i></div>
-                    <div>
-                        <p class="metric-label">Nhiệt Độ Tấm Pin</p>
-                        <p class="metric-value" id="solar-temp">-- °C</p>
-                    </div>
-                </div>
-
-                <div class="metric-card big-metric-card">
-                    <div class="icon-circle" style="color: #dc3545; background-color: rgba(220, 53, 69, 0.1);"><i class="fas fa-chart-bar"></i></div>
-                    <div>
-                        <p class="metric-label">Tốc Độ Tăng Nhiệt</p>
-                        <p class="metric-value" id="temp-rate">-- °C/s</p>
-                    </div>
-                </div>
-
-                <div class="metric-card big-metric-card">
-                    <div class="icon-circle" style="color:#28a745; background-color: rgba(40, 167, 69, 0.1);"><i class="fas fa-leaf"></i></div> 
-                    <div>
-                        <p class="metric-label">Hiệu Suất / Sức Khỏe</p>
-                        <p class="metric-value" id="efficiency">--%</p>
-                    </div>
-                </div>
+    <!-- CONTENT AREA -->
+    <div id="content">
+        <!-- TOP NAV -->
+        <div class="top-header">
+            <div class="d-flex align-items-center">
+                <button type="button" id="sidebarCollapse" class="btn-toggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <span class="ms-3 fw-bold text-secondary" style="font-size: 1.1rem;">Command Center</span>
             </div>
-        </section>
-<!--Dashboard-->
-
-<!---->
-        <section class="section-card mb-4" style="border-top: 4px solid #28a745; background: #f1f8e9;">
-            <h2 style="color: #2e7d32; font-size: 1.4em; border-bottom: none; margin-bottom: 15px;">
-                <i class="fas fa-seedling"></i> Hiệu Quả Hôm Nay
-            </h2>
-            <div class="row text-center align-items-center">
-                <div class="col-md-4 mb-3 mb-md-0 border-end">
-                    <div class="text-muted text-uppercase small fw-bold">Sản lượng tăng thêm</div>
-                    <div id="eff-gain-kwh" class="display-6 fw-bold text-success">0.000 <span class="fs-6">kWh</span></div>
-                    <small class="text-secondary fst-italic">(So với không làm mát)</small>
-                </div>
-                
-                <div class="col-md-4 mb-3 mb-md-0 border-end">
-                    <div class="text-muted text-uppercase small fw-bold">Tiền tiết kiệm được</div>
-                    <div id="eff-save-vnd" class="display-6 fw-bold text-primary">0 đ</div>
-                    <small class="text-secondary fst-italic">Tự động theo giá điện bậc thang</small>
-                </div>
-
-                <div class="col-md-4">
-                    <div class="text-muted text-uppercase small fw-bold">Tăng trưởng tháng này</div>
-                    <div id="eff-percent-month" class="display-6 fw-bold text-warning">+0%</div>
-                    <div class="progress mt-2" style="height: 6px; width: 60%; margin: 0 auto; background-color: #e0e0e0;">
-                        <div id="eff-progress-bar" class="progress-bar bg-warning" role="progressbar" style="width: 0%"></div>
-                    </div>
-                </div>
-            </div>
-        </section>
-<!---->
-        <div class="card mb-4 shadow-sm">
-            <div class="card-body d-flex flex-column align-items-center">
-                <h5 class="mb-3"><i class="fas fa-gamepad"></i> Chế Độ Điều Khiển</h5>
-                
-                <div class="btn-group w-100 mode-btn-group" role="group">
-                    <input type="radio" class="btn-check" name="sys_mode" id="mode_manual" autocomplete="off" checked>
-                    <label class="btn btn-outline-secondary" for="mode_manual">Thủ Công</label>
-
-                    <input type="radio" class="btn-check" name="sys_mode" id="mode_auto" autocomplete="off">
-                    <label class="btn btn-outline-warning" for="mode_auto">Tự Động</label>
-
-                    <input type="radio" class="btn-check" name="sys_mode" id="mode_smart" autocomplete="off">
-                    <label class="btn btn-outline-success" for="mode_smart">Smart Eco (AI)</label>
-                </div>
-                <small class="text-muted mt-2" id="mode-desc">Bạn toàn quyền điều khiển.</small>
-                
-                <div id="economic-stats" style="display: none; margin-top: 15px; width: 100%; padding: 10px; background: #e8f5e9; border-radius: 10px; border: 1px solid #c3e6cb;">
-                    <div class="row text-center">
-                        <div class="col-6">Lãi: <strong class="text-success" id="eco-profit">0 đ</strong></div>
-                        <div class="col-6">Tiết kiệm: <strong class="text-primary" id="eco-energy">0 Wh</strong></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="main-container" style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
             
-            <section class="control-panel section-card" style="flex:1; border: 1px solid #ddd; padding: 20px; border-radius: 10px; background: #fff;">
-                <h2 style="margin-top: 0; color: #d35400;"><i class="fas fa-thermometer-high"></i> Phun Làm Mát</h2>
-                
-                <div style="background: #fff5f5; border-left: 4px solid #ff4d4d; padding: 10px; margin-bottom: 15px;">
-                    <p style="margin: 0; color: #c0392b; font-weight: bold;">
-                        <i class="fas fa-exclamation-triangle"></i> Cảnh báo nhiệt độ cao
-                    </p>
-                </div>
+            <div class="d-flex align-items-center">
+                <select id="station-selector" class="form-select station-select me-3" onchange="changeStation(this.value)">
+                    <option value="ESP32_DEFAULT">📍 Trạm Sài Gòn (Mặc định)</option>
+                    <option value="ESP32_002">📍 Trạm Đà Lạt</option>
+                </select>
 
-                <div class="control-actions">
-                    <button id="stop-cool-btn" class="btn btn-secondary w-100 mb-2" disabled>DỪNG PHUN</button>
-                    <button id="btn-cool-on" class="alert-btn high" style="width: 100%; background: forestgreen; color: white; border: none; padding: 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">
-                        KÍCH HOẠT PHUN LÀM MÁT
-                    </button>
-                    
-                    <p id="auto-cool-msg" style="color: #e67e22; font-weight: bold; text-align: center; margin-top: 10px; display: none;">
-                        <i class="fas fa-robot"></i> AI đang điều khiển...
-                    </p>
-                    <p class="alert-status" id="cool-status" style="margin-top: 15px; text-align: center; font-style: italic; color: #7f8c8d;">
-                        Trạng thái: **Không Phun**
-                    </p>
-                </div>
-            </section>
-
-            <section class="control-panel section-card" style="flex:1; border: 1px solid #ddd; padding: 20px; border-radius: 10px; background: #fff;">
-                <h2 style="margin-top: 0; color: #2980b9;"><i class="fas fa-broom"></i> Phun Làm Sạch</h2>
-                
-                <div style="background: #e1f5fe; border-left: 4px solid #0288d1; padding: 10px; margin-bottom: 15px;">
-                    <p style="margin: 0; color: #01579b; font-weight: bold;">
-                        <i class="fas fa-wind"></i> Bụi bẩn: <span id="dust-level">--</span>%
-                    </p>
-                </div>
-
-                <div class="control-actions">
-                    <button id="stop-clean-btn" class="btn btn-secondary w-100 mb-2" disabled>DỪNG PHUN</button>
-                    <button id="btn-clean-on" class="alert-btn high" style="width: 100%; background: forestgreen; color: white; border: none; padding: 12px; border-radius: 4px; font-weight: bold; cursor: pointer;">
-                        KÍCH HOẠT PHUN LÀM SẠCH
-                    </button>
-                    
-                    <p id="auto-clean-msg" style="color: #0288d1; font-weight: bold; text-align: center; margin-top: 10px; display: none;">
-                        <i class="fas fa-robot"></i> Hệ thống đang làm sạch...
-                    </p>
-                    <p class="alert-status" id="clean-status" style="margin-top: 15px; text-align: center; font-style: italic; color: #7f8c8d;">
-                        Trạng thái: **Không Phun**
-                    </p>
-                </div>
-            </section>
+                <!-- DROPDOWN PROFILE NGƯỜI DÙNG -->
+<div class="dropdown ms-3">
+    <a href="#" class="d-flex align-items-center text-decoration-none" id="dropdownUser" data-bs-toggle="dropdown" aria-expanded="false">
+        <!-- Tự động lấy tên User từ Session để tạo Avatar -->
+        <img src="https://ui-avatars.com/api/?name={{ session.get('username', 'U') }}&background=3b82f6&color=fff&bold=true" alt="Avatar" width="40" height="40" class="rounded-circle shadow-sm border border-2 border-white">
+    </a>
+    
+    <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 mt-2" aria-labelledby="dropdownUser" style="min-width: 250px; border-radius: 12px;">
+        <!-- Phần Header của Menu -->
+        <li class="px-4 py-3 border-bottom text-center bg-light" style="border-radius: 12px 12px 0 0;">
+            <img src="https://ui-avatars.com/api/?name={{ session.get('username', 'U') }}&background=3b82f6&color=fff&bold=true" alt="Avatar" width="60" height="60" class="rounded-circle mb-2 shadow-sm">
+            <h6 class="fw-bold mb-0 text-dark" style="word-break: break-all;">{{ session.get('username', 'Người dùng') }}</h6>
+            <span class="badge bg-success mt-2">Tài khoản Pro</span>
+        </li>
+        
+        <!-- Các nút chức năng -->
+        <li class="mt-2"><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-id-card me-2 text-primary"></i> Quản lý hồ sơ</a></li>
+        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-camera me-2 text-info"></i> Đổi ảnh đại diện</a></li>
+        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-cog me-2 text-secondary"></i> Cài đặt bảo mật</a></li>
+        
+        <li><hr class="dropdown-divider my-2"></li>
+        
+        <!-- Nút Đăng Xuất gọi về hàm /logout trong app.py -->
+        <li class="mb-1"><a class="dropdown-item py-2 fw-bold text-danger" href="/logout"><i class="fas fa-sign-out-alt me-2"></i> Đăng xuất ngay</a></li>
+    </ul>
+</div>
+            </div>
         </div>
 
-        <section class="chart-section section-card mt-4">
-            <h2><i class="fas fa-chart-area"></i> Biểu Đồ Nhiệt Độ</h2>
-            <div class="chart-container">
-                <canvas id="temperatureChart"></canvas>
+        <!-- MAIN DASHBOARD -->
+        <div class="container-fluid p-4">
+            
+            <!-- THẺ THỐNG KÊ NHANH -->
+                        <!-- THẺ THỐNG KÊ NHANH (BẢN ĐẦY ĐỦ 100%) -->
+            <div class="row mb-2">
+                <!-- Hàng 1: Môi trường & Vật lý -->
+                <div class="col-xl-3 col-md-6">
+                    <div class="stat-card">
+                        <div class="stat-icon icon-temp"><i class="fas fa-temperature-high"></i></div>
+                        <div class="stat-content">
+                            <p>Nhiệt Độ Pin</p>
+                            <h4 id="solar-temp">-- °C</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:#f0fdf4; color:#22c55e;"><i class="fas fa-thermometer-half"></i></div>
+                        <div class="stat-content">
+                            <p>Nhiệt Độ Môi Trường</p>
+                            <h4 id="current-temp">-- °C</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:#eff6ff; color:#3b82f6;"><i class="fas fa-tint"></i></div>
+                        <div class="stat-content">
+                            <p>Độ Ẩm</p>
+                            <h4 id="humidity">-- %</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="stat-card">
+                        <div class="stat-icon icon-lux"><i class="fas fa-sun"></i></div>
+                        <div class="stat-content">
+                            <p>Cường Độ Sáng</p>
+                            <h4 id="light-intensity">-- Lux</h4>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </section> 
-    </div>
-</main>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-<script src="{{ url_for('static', filename='js/index.js') }}"></script>
-<!-- Script xử lý chuyển đổi Trạm -->
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        // 1. Khi load trang, hiển thị đúng trạm đang lưu trong máy
-        const savedMac = localStorage.getItem('device_id') || 'ESP32_DEFAULT';
-        const selector = document.getElementById('station-selector');
-        if(selector) {
-            selector.value = savedMac;
+            <div class="row mb-2">
+                <!-- Hàng 2: Sức khỏe & AI -->
+                <div class="col-xl-3 col-md-6">
+                    <div class="stat-card">
+                        <div class="stat-icon icon-dust"><i class="fas fa-smog"></i></div>
+                        <div class="stat-content">
+                            <p>Mức Độ Bụi</p>
+                            <h4 id="dust-level">-- %</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:#fef2f2; color:#ef4444;"><i class="fas fa-heartbeat"></i></div>
+                        <div class="stat-content">
+                            <p>Sức Khỏe Pin</p>
+                            <h4 id="efficiency">--%</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="stat-card">
+                        <div class="stat-icon icon-health"><i class="fas fa-leaf"></i></div>
+                        <div class="stat-content">
+                            <p>Tiền Tiết Kiệm AI</p>
+                            <h4 id="eco-profit" class="text-success">-- đ</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background:#fff7ed; color:#f97316;"><i class="fas fa-bolt"></i></div>
+                        <div class="stat-content">
+                            <p>Điện Năng Tiết Kiệm</p>
+                            <h4 id="eco-energy" class="text-warning">-- Wh</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- BIỂU ĐỒ BÊN TRÁI (Lấy phần lớn không gian) -->
+                <div class="col-lg-8">
+                    <div class="panel-box">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="panel-title m-0"><i class="fas fa-chart-area"></i> Dự Báo Nhiệt Độ AI (5 phút tới)</h5>
+                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle" id="temp-rate">-- °C/5p</span>
+                        </div>
+                        <div style="height: 350px;">
+                            <canvas id="temperatureChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BẢNG ĐIỀU KHIỂN BÊN PHẢI -->
+                <div class="col-lg-4">
+                    <div class="panel-box h-100">
+                        <h5 class="panel-title"><i class="fas fa-gamepad"></i> Trung Tâm Điều Khiển</h5>
+                        
+                        <!-- Chọn Chế độ -->
+                        <p class="text-muted small fw-bold mb-2">CHẾ ĐỘ HOẠT ĐỘNG</p>
+                        <div class="mode-selector">
+                            <div class="mode-btn">
+                                <input type="radio" name="sys_mode" id="mode_manual" value="MANUAL" checked>
+                                <label for="mode_manual"><i class="fas fa-hand-pointer"></i> Thủ công</label>
+                            </div>
+                            <div class="mode-btn">
+                                <input type="radio" name="sys_mode" id="mode_auto" value="AUTO">
+                                <label for="mode_auto"><i class="fas fa-robot"></i> Auto</label>
+                            </div>
+                            <div class="mode-btn">
+                                <input type="radio" name="sys_mode" id="mode_smart" value="SMART_ECO">
+                                <label for="mode_smart"><i class="fas fa-brain text-purple"></i> Smart Eco</label>
+                            </div>
+                        </div>
+                        <p id="mode-desc" class="small text-secondary mb-4 text-center">Bạn toàn quyền kiểm soát thiết bị.</p>
+
+                        <hr class="text-black-50 mb-4">
+
+                        <!-- Trạng thái & Nút bơm mát -->
+                        <div class="d-flex justify-content-between align-items-end mb-2">
+                            <span class="fw-bold text-dark">Hệ thống Phun Nước</span>
+                            <span id="cool-status" class="status-badge status-stopped">Đang Tắt</span>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <button id="btn-cool-on" class="control-btn btn-on"><i class="fas fa-play"></i> BẬT BƠM</button>
+                            </div>
+                            <div class="col-6">
+                                <button id="stop-cool-btn" class="control-btn btn-off" disabled><i class="fas fa-stop"></i> TẮT BƠM</button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+        </div> <!-- End container -->
+    </div> <!-- End content -->
+
+    <!-- ============================================== -->
+    <!-- SCRIPT TƯƠNG TÁC (Tách riêng UI và Logic)      -->
+    <!-- ============================================== -->
+    <script>
+        // 1. Logic Giao diện (Sidebar & Trạm)
+        document.getElementById('sidebarCollapse').addEventListener('click', function () {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        });
+
+        document.addEventListener("DOMContentLoaded", function() {
+            const savedMac = localStorage.getItem('device_id') || 'ESP32_DEFAULT';
+            const selector = document.getElementById('station-selector');
+            if(selector) selector.value = savedMac;
+        });
+
+        function changeStation(macAddress) {
+            localStorage.setItem('device_id', macAddress);
+            window.location.reload();
         }
-    });
 
-    // 2. Hàm được gọi khi người dùng bấm chọn trạm khác
-    function changeStation(macAddress) {
-        // Lưu mã trạm mới vào bộ nhớ
-        localStorage.setItem('device_id', macAddress);
+        // 2. Ghi đè hàm showSystemAlert cũ bằng Toast xịn xò
+        function showSystemAlert(level, message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            let bgClass = 'bg-primary';
+            let icon = 'fa-info-circle';
+            
+            if(level === 'danger') { bgClass = 'bg-danger'; icon = 'fa-fire'; }
+            if(level === 'warning') { bgClass = 'bg-warning text-dark'; icon = 'fa-exclamation-triangle'; }
+            if(level === 'success') { bgClass = 'bg-success'; icon = 'fa-check-circle'; }
+
+            toast.className = `toast align-items-center text-white ${bgClass} border-0 show mb-2`;
+            toast.setAttribute('role', 'alert');
+            toast.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body fw-bold">
+                        <i class="fas ${icon} me-2"></i> ${message}
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.parentElement.parentElement.remove()"></button>
+                </div>
+            `;
+            container.appendChild(toast);
+            
+            // Tự tắt sau 4 giây
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300); // Đợi hiệu ứng mờ
+            }, 4000);
+        }
         
-        // Tải lại trang để toàn bộ JS (index.js, weather.js...) lấy mã mới và gọi lại Server
-        window.location.reload();
-    }
-</script>
+        // Ghi đè hàm alert() mặc định của window để code JS cũ tự động gọi Toast
+        window.alert = function(msg) {
+            showSystemAlert('warning', msg);
+        };
+    </script>
+
+    <!-- Nạp Logic Backend của bạn -->
+    <script src="{{ url_for('static', filename='js/index.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

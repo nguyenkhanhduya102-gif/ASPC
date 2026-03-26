@@ -3,182 +3,153 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lịch Sử Hoạt Động | ASPC</title>
+    <title>Lịch Sử Lệnh | ASPC Pro</title>
     
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style_index.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/parameter.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js" defer></script>
-
     <style>
-        /* Tùy chỉnh riêng cho bảng lịch sử */
-        .table-responsive {
-            border-radius: 12px;
-            overflow: hidden;
-        }
-        .table {
-            margin-bottom: 0;
-            vertical-align: middle;
-        }
-        .table thead th {
-            background-color: #f1f3f5;
-            color: #495057;
-            border-bottom: 2px solid #dee2e6;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-            font-weight: 700;
-        }
-        /* Badge trạng thái */
-        .badge-custom {
-            padding: 8px 12px;
-            border-radius: 30px;
-            font-weight: 600;
-            font-size: 0.8rem;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
+        /* CSS Layout chung */
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #1e293b; overflow-x: hidden; }
+        #sidebar { min-width: 250px; max-width: 250px; background-color: #0f172a; min-height: 100vh; transition: all 0.3s; position: fixed; z-index: 1000; }
+        #sidebar.collapsed { min-width: 80px; max-width: 80px; }
+        #sidebar .sidebar-header { padding: 20px; color: white; border-bottom: 1px solid #1e293b; text-align: center; height: 70px; display: flex; align-items: center; justify-content: center;}
+        #sidebar.collapsed .logo-text { display: none; }
+        #sidebar ul.components { padding: 20px 0; }
+        #sidebar ul li a { padding: 15px 20px; display: block; color: #94a3b8; text-decoration: none; display: flex; align-items: center; transition: 0.2s;}
+        #sidebar ul li a:hover, #sidebar ul li.active > a { color: #fff; background: #1e293b; border-left: 4px solid #3b82f6; }
+        #sidebar ul li a i { margin-right: 15px; font-size: 1.2rem; width: 20px; text-align: center; }
+        #sidebar.collapsed ul li a span { display: none; }
+        #content { width: calc(100% - 250px); margin-left: 250px; transition: all 0.3s; min-height: 100vh; }
+        #sidebar.collapsed + #content { width: calc(100% - 80px); margin-left: 80px; }
+        .top-header { background: #fff; height: 70px; padding: 0 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 999; }
+        .btn-toggle { background: transparent; border: none; font-size: 1.3rem; color: #64748b; cursor: pointer; padding: 5px 10px; border-radius: 5px; }
+        .btn-toggle:hover { background: #f1f5f9; color: #0f172a; }
+        .station-select { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 12px; font-weight: 600; color: #334155; font-size: 0.9rem;}
+        
+        /* CSS Bảng Lịch sử */
+        .panel-box { background: #fff; border-radius: 12px; padding: 25px; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
+        .table { margin-bottom: 0; vertical-align: middle; }
+        .table thead th { background-color: #f8fafc; color: #64748b; border-bottom: 2px solid #e2e8f0; text-transform: uppercase; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.5px; padding: 15px;}
+        .table tbody td { padding: 15px; border-bottom: 1px solid #f1f5f9; color: #334155; font-weight: 500;}
+        
+        /* Badge UI */
+        .status-badge { padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 0.8rem;}
+        .status-on { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;}
+        .status-off { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca;}
+        
+        .source-tag { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 600;}
+        .source-smart { background: #f3e8ff; color: #4338ca; }
+        .source-auto { background: #e0f2fe; color: #1d4ed8; }
+        .source-manual { background: #f1f5f9; color: #475569; }
     </style>
 </head>
 <body>
 
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
-      <div class="container-fluid">
-        <a class="navbar-brand" href="/">A S P C</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent">
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarSupportedContent">
-          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-            <li class="nav-item"><a class="nav-link" href="./index.html">Dashboard</a></li>
-            <li class="nav-item"><a class="nav-link active" href="./history.html">Lịch Sử</a></li>
-            <li class="nav-item"><a class="nav-link" href="./parameter.html">Thông Số</a></li>
-            <li class="nav-item"><a class="nav-link" href="./health.html">Sức Khỏe & Báo Cáo</a></li>
-            <li class="nav-item"><a class="nav-link" href="./weather.html">Dự Báo Thời tiết</a></li>
-            <li class="nav-item"><a class="nav-link" href="./hotspot.html">Điểm Nóng</a></li>
-          </ul>
+    <!-- SIDEBAR -->
+    <nav id="sidebar">
+        <div class="sidebar-header">
+            <h3 class="logo-text fw-bold m-0"><i class="fas fa-solar-panel text-primary"></i> ASPC</h3>
         </div>
-      </div>
+        <ul class="list-unstyled components">
+            <li><a href="index.html"><i class="fas fa-th-large"></i> <span>Tổng Quan</span></a></li>
+            <li><a href="weather.html"><i class="fas fa-cloud-sun-rain"></i> <span>Dự Báo Thời Tiết</span></a></li>
+            <li><a href="health.html"><i class="fas fa-heartbeat"></i> <span>Sức Khỏe Pin</span></a></li>
+            <li><a href="hotspot.html"><i class="fas fa-fire"></i> <span>Điểm Nóng AI</span></a></li>
+            <li class="active"><a href="history.html"><i class="fas fa-history"></i> <span>Lịch Sử Lệnh</span></a></li>
+            <li><a href="parameter.html"><i class="fas fa-cog"></i> <span>Cấu Hình</span></a></li>
+        </ul>
     </nav>
 
-    <div class="container py-5">
-        <div class="row justify-content-center">
-            <div class="col-lg-10">
-                
-                <div class="glass-card fade-in-up">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h2 class="mb-0"><i class="fas fa-history text-primary"></i> Nhật Ký Hoạt Động</h2>
-                        <button class="btn btn-outline-primary btn-sm" onclick="loadHistory()">
-                            <i class="fas fa-sync-alt"></i> Làm mới
-                        </button>
-                    </div>
-                    
-                    <p class="text-muted fst-italic mb-4">Hiển thị 50 hành động gần nhất của hệ thống (Bao gồm cả 3 chế độ).</p>
+    <!-- CONTENT AREA -->
+    <div id="content">
+        <!-- TOP NAV -->
+        <div class="top-header">
+            <div class="d-flex align-items-center">
+                <button type="button" id="sidebarCollapse" class="btn-toggle"><i class="fas fa-bars"></i></button>
+                <span class="ms-3 fw-bold text-secondary" style="font-size: 1.1rem;">Nhật Ký Hoạt Động</span>
+            </div>
+            <div class="d-flex align-items-center">
+                <select id="station-selector" class="form-select station-select me-3" onchange="changeStation(this.value)">
+                    <option value="ESP32_DEFAULT">📍 Trạm Sài Gòn (Mặc định)</option>
+                    <option value="ESP32_002">📍 Trạm Đà Lạt</option>
+                </select>
+                <!-- DROPDOWN PROFILE NGƯỜI DÙNG -->
+<div class="dropdown ms-3">
+    <a href="#" class="d-flex align-items-center text-decoration-none" id="dropdownUser" data-bs-toggle="dropdown" aria-expanded="false">
+        <!-- Tự động lấy tên User từ Session để tạo Avatar -->
+        <img src="https://ui-avatars.com/api/?name={{ session.get('username', 'U') }}&background=3b82f6&color=fff&bold=true" alt="Avatar" width="40" height="40" class="rounded-circle shadow-sm border border-2 border-white">
+    </a>
+    
+    <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 mt-2" aria-labelledby="dropdownUser" style="min-width: 250px; border-radius: 12px;">
+        <!-- Phần Header của Menu -->
+        <li class="px-4 py-3 border-bottom text-center bg-light" style="border-radius: 12px 12px 0 0;">
+            <img src="https://ui-avatars.com/api/?name={{ session.get('username', 'U') }}&background=3b82f6&color=fff&bold=true" alt="Avatar" width="60" height="60" class="rounded-circle mb-2 shadow-sm">
+            <h6 class="fw-bold mb-0 text-dark" style="word-break: break-all;">{{ session.get('username', 'Người dùng') }}</h6>
+            <span class="badge bg-success mt-2">Tài khoản Pro</span>
+        </li>
+        
+        <!-- Các nút chức năng -->
+        <li class="mt-2"><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-id-card me-2 text-primary"></i> Quản lý hồ sơ</a></li>
+        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-camera me-2 text-info"></i> Đổi ảnh đại diện</a></li>
+        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-cog me-2 text-secondary"></i> Cài đặt bảo mật</a></li>
+        
+        <li><hr class="dropdown-divider my-2"></li>
+        
+        <!-- Nút Đăng Xuất gọi về hàm /logout trong app.py -->
+        <li class="mb-1"><a class="dropdown-item py-2 fw-bold text-danger" href="/logout"><i class="fas fa-sign-out-alt me-2"></i> Đăng xuất ngay</a></li>
+    </ul>
+</div>
+            </div>
+        </div>
 
-                    <div class="table-responsive shadow-sm">
-                        <table class="table table-hover bg-white">
-                            <thead>
-                                <tr>
-                                    <th>Thời gian</th>
-                                    <th>Đối tượng</th>
-                                    <th class="text-center">Hành động</th>
-                                    <th>Chi tiết / Loại</th>
-                                    <th class="text-end">Nguồn lệnh</th>
-                                </tr>
-                            </thead>
-                            <tbody id="history-table-body">
-                                <tr>
-                                    <td colspan="5" class="text-center py-4">
-                                        <div class="spinner-border text-primary" role="status">
-                                            <span class="visually-hidden">Loading...</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+        <!-- MAIN CONTENT -->
+        <div class="container-fluid p-4">
+            <div class="panel-box">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="fw-bold m-0"><i class="fas fa-clipboard-list text-primary me-2"></i> Lịch Sử Lệnh Gần Đây</h5>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="loadHistory()"><i class="fas fa-sync-alt"></i> Tải Lại</button>
                 </div>
-
+                
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Thời Gian</th>
+                                <th>Người Dùng</th>
+                                <th>Trạng Thái</th>
+                                <th>Hệ Thống</th>
+                                <th>Nguồn Kích Hoạt</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table-body">
+                            <!-- JS history.js sẽ nhét nội dung vào đây -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- SCRIPT TƯƠNG TÁC UI -->
     <script>
-        document.addEventListener('DOMContentLoaded', loadHistory);
-
-        function loadHistory() {
-            fetch('/api/get_history')
-                .then(response => response.json())
-                .then(data => {
-                    const tbody = document.getElementById('history-table-body');
-                    tbody.innerHTML = ''; // Xóa loading
-
-                    if (data.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">Chưa có dữ liệu lịch sử</td></tr>';
-                        return;
-                    }
-
-                    data.forEach(row => {
-                        // 1. Xử lý màu sắc Hành Động
-                        let actionBadge = '';
-                        if (row.command === 'BẬT' || row.command === '2') {
-                            actionBadge = '<span class="badge bg-success">BẬT</span>';
-                        } else if (row.command === 'TẮT' || row.command === '0') {
-                            actionBadge = '<span class="badge bg-secondary">TẮT</span>';
-                        } else {
-                            actionBadge = `<span class="badge bg-info text-dark">${row.command}</span>`;
-                        }
-
-                        // 2. Xử lý Nguồn Lệnh (Quan trọng cho 3 chế độ)
-                        let sourceBadge = '';
-                        let sourceIcon = '';
-                        let sourceClass = '';
-
-                        // Logic phân loại mới
-                        if (row.source === 'SMART_ECO') {
-                            sourceClass = 'bg-success'; // Xanh lá
-                            sourceIcon = 'fa-leaf';
-                            row.source = 'Smart Eco (AI)';
-                        } 
-                        else if (row.source === 'AI_AUTO' || row.source === 'AUTO') {
-                            sourceClass = 'bg-dark'; // Đen/Xám đậm
-                            sourceIcon = 'fa-robot';
-                            if(row.source === 'AI_AUTO') row.source = 'Tự động (Nhiệt)';
-                        } 
-                        else if (row.source === 'WEB' || row.source === 'MANUAL') {
-                            sourceClass = 'bg-primary'; // Xanh dương
-                            sourceIcon = 'fa-hand-pointer';
-                            row.source = 'Thủ công (Web)';
-                        }
-                        else {
-                            sourceClass = 'bg-secondary';
-                            sourceIcon = 'fa-server';
-                        }
-
-                        sourceBadge = `<span class="badge-custom ${sourceClass} text-white">
-                                        <i class="fas ${sourceIcon}"></i> ${row.source}
-                                       </span>`;
-
-                        // 3. Render hàng
-                        const tr = document.createElement('tr');
-                        tr.innerHTML = `
-                            <td style="font-family: monospace; font-weight: 600;">${row.timestamp}</td>
-                            <td class="fw-bold text-secondary">${row.user_id}</td>
-                            <td class="text-center">${actionBadge}</td>
-                            <td>${row.action_type || '--'}</td>
-                            <td class="text-end">${sourceBadge}</td>
-                        `;
-                        tbody.appendChild(tr);
-                    });
-                })
-                .catch(err => {
-                    console.error(err);
-                    document.getElementById('history-table-body').innerHTML = 
-                        '<tr><td colspan="5" class="text-center text-danger">Lỗi tải dữ liệu!</td></tr>';
-                });
+        document.getElementById('sidebarCollapse').addEventListener('click', function () {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        });
+        document.addEventListener("DOMContentLoaded", function() {
+            const savedMac = localStorage.getItem('device_id') || 'ESP32_DEFAULT';
+            const selector = document.getElementById('station-selector');
+            if(selector) selector.value = savedMac;
+        });
+        function changeStation(macAddress) {
+            localStorage.setItem('device_id', macAddress);
+            window.location.reload();
         }
     </script>
-
+    
+    <!-- Link JS Data -->
+    <script src="{{ url_for('static', filename='js/history.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

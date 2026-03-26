@@ -1,67 +1,132 @@
 <!DOCTYPE html>
-<html lang="en">
-    <head>
-        <meta charset="UTF-8"/>
-        <meta name="viewport" content="width=device-width, initial-scale=0.1"/>
-        <title>Đăng nhập</title>
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/style_login.css') }}">
-    
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" 
-        rel="stylesheet" 
-        integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" 
-        crossorigin="anonymous"/>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Truy Cập Hệ Thống | ASPC Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; background: #0f172a; min-height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;}
         
-    </head>
-    <body>
-       
-    <div 
-        style="height:100vh"
-        class="container d-flex justify-content-center align-items-center"  >
-        
-            <form id="formLogin" style="width:400px">
-                <h3 class="text-center">Đăng Nhập tài khoản</h3>
+        /* Hạt năng lượng trôi nổi làm nền */
+        .glow-circle { position: absolute; border-radius: 50%; filter: blur(80px); z-index: 0; animation: float 10s infinite ease-in-out alternate;}
+        .glow-1 { width: 400px; height: 400px; background: rgba(59, 130, 246, 0.3); top: -100px; left: -100px; }
+        .glow-2 { width: 300px; height: 300px; background: rgba(16, 185, 129, 0.2); bottom: -50px; right: -50px; animation-delay: -5s;}
+        @keyframes float { 0% { transform: translateY(0) scale(1); } 100% { transform: translateY(50px) scale(1.1); } }
 
+        /* Khối form chính */
+        .auth-container { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 40px; width: 100%; max-width: 450px; z-index: 1; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);}
+        .auth-logo { text-align: center; margin-bottom: 30px; }
+        .auth-logo i { font-size: 3.5rem; color: #3b82f6; margin-bottom: 10px; filter: drop-shadow(0 0 10px rgba(59,130,246,0.5));}
+        .auth-logo h2 { color: white; font-weight: 800; letter-spacing: 1px; margin: 0; }
+        .auth-logo p { color: #94a3b8; font-size: 0.9rem; margin-top: 5px;}
+
+        /* Chuyển tab Đăng nhập / Đăng ký */
+        .nav-tabs { border: none; margin-bottom: 30px; background: rgba(15, 23, 42, 0.6); border-radius: 10px; padding: 5px; }
+        .nav-tabs .nav-link { border: none; color: #94a3b8; font-weight: 600; border-radius: 8px; padding: 12px; transition: all 0.3s;}
+        .nav-tabs .nav-link.active { background: #3b82f6; color: white; box-shadow: 0 4px 10px rgba(59,130,246,0.3);}
+
+        /* Form Input */
+        .form-label { color: #cbd5e1; font-weight: 500; font-size: 0.9rem; margin-bottom: 8px;}
+        .input-group-text { background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.1); border-right: none; color: #64748b;}
+        .form-control { background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.1); border-left: none; color: white; padding: 12px; }
+        .form-control:focus { background: rgba(15, 23, 42, 1); border-color: #3b82f6; box-shadow: none; color: white;}
+        .form-control::placeholder { color: #475569; }
         
-        <div class="mb-3">
-           <label for="email" class="form-label">
-            Email</label>
-           <input 
-           type="text" 
-           class="form-control" 
-           id="email" 
-           placeholder="Nhập Email">
+        .btn-submit { width: 100%; padding: 14px; border-radius: 10px; font-weight: 700; font-size: 1.1rem; border: none; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; margin-top: 10px; transition: transform 0.2s, box-shadow 0.2s;}
+        .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(59,130,246,0.3); }
+        .btn-submit-register { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+        .btn-submit-register:hover { box-shadow: 0 10px 20px rgba(16,185,129,0.3); }
+    </style>
+</head>
+<body>
+
+    <div class="glow-circle glow-1"></div>
+    <div class="glow-circle glow-2"></div>
+
+    <div class="auth-container">
+        <div class="auth-logo">
+            <i class="fas fa-solar-panel"></i>
+            <h2>ASPC PRO</h2>
+            <p>Hệ thống Làm mát AI</p>
         </div>
 
-        <div class="mb-3">
-           <label for="password" class="form-label">
-            Mật Khẩu</label>
-           <input 
-           type="text" 
-           class="form-control" 
-           id="password" 
-           placeholder="Nhập Mật Khẩu">
-        </div>
-        <div id="alertError" 
-        style="display:none" 
-        class="alert alert-danger" 
-        role="alert">
-          Email hoặc mật khẩu không đúng
-       </div>
+        <!-- Chỗ hiển thị thông báo lỗi/thành công từ Flask (app.py) -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            {% for category, message in messages %}
+              <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} small py-2 fw-bold text-center border-0 rounded-3 shadow-sm mb-4">
+                {{ message }}
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
 
-        <button type="submit" style="width:100%" class="btn btn-primary">Đăng Nhập</button>
-        
-        <div>
-        <p class="text-center mt-2">
-            Bạn chưa có tài khoản? <a href="./register.html">Đăng Kí</a>
-        </p>
-        
+        <!-- Tab Điều khiển -->
+        <ul class="nav nav-tabs d-flex text-center" id="authTabs" role="tablist">
+            <li class="nav-item flex-fill" role="presentation">
+                <button class="nav-link w-100 active" id="login-tab" data-bs-toggle="tab" data-bs-target="#login-pane" type="button" role="tab"><i class="fas fa-sign-in-alt me-2"></i>Đăng Nhập</button>
+            </li>
+            <li class="nav-item flex-fill" role="presentation">
+                <button class="nav-link w-100" id="register-tab" data-bs-toggle="tab" data-bs-target="#register-pane" type="button" role="tab"><i class="fas fa-user-plus me-2"></i>Đăng Ký</button>
+            </li>
+        </ul>
 
-
-            </form>
+        <div class="tab-content" id="authTabsContent">
             
+            <!-- ================= TAB ĐĂNG NHẬP ================= -->
+            <div class="tab-pane fade show active" id="login-pane" role="tabpanel">
+                <form action="/login" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Tên tài khoản (Email)</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-user"></i></span>
+                            <!-- Chú ý thuộc tính name="username" phải khớp với app.py -->
+                            <input type="text" name="username" class="form-control" placeholder="admin@gmail.com" required>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label">Mật khẩu</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                            <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-submit">VÀO DASHBOARD <i class="fas fa-arrow-right ms-2"></i></button>
+                </form>
+            </div>
+
+            <!-- ================= TAB ĐĂNG KÝ ================= -->
+            <div class="tab-pane fade" id="register-pane" role="tabpanel">
+                <form action="/register" method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Tên tài khoản</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-user-plus"></i></span>
+                            <input type="text" name="reg_username" class="form-control" placeholder="Tên đăng nhập (Email)..." required>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label">Tạo mật khẩu</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="fas fa-key"></i></span>
+                            <input type="password" name="reg_password" class="form-control" placeholder="Ít nhất 6 ký tự..." required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn-submit btn-submit-register"><i class="fas fa-check-circle me-2"></i>TẠO TÀI KHOẢN MỚI</button>
+                </form>
+            </div>
+
         </div>
-    
-        
-    <script src="{{ url_for('static', filename='js/login.js') }}"></script>
-    </body>
+
+        <div class="text-center mt-4">
+            <a href="/" class="text-decoration-none text-muted small"><i class="fas fa-home me-1"></i> Quay lại trang giới thiệu</a>
+        </div>
+    </div>
+
+    <!-- Script để Tab Bootstrap hoạt động -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
 </html>

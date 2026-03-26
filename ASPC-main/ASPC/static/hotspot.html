@@ -3,139 +3,179 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASPC - Giám sát Điểm Nóng AI</title>
-
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <title>Điểm Nóng AI | ASPC Pro</title>
     
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js" defer></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style_index.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style_hotspot.css') }}">
-
+    <!-- Socket IO để nhận cảnh báo Hotspot -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 
     <style>
-    /* Lớp phủ toàn màn hình */
-    .bg-image-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        /* Thay đường dẫn ảnh của Duy vào đây */
-        background-image: linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), 
-                          url('https://images.unsplash.com/photo-1558444479-c84825927c3a?q=80&w=2070&auto=format&fit=crop'); 
-        background-size: cover;
-        background-position: center;
-        background-attachment: fixed;
-        z-index: -1; /* Đẩy ra sau cùng */
-    }
+        /* CSS LAYOUT CHUNG (Copy y hệt từ các trang trước) */
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #1e293b; overflow-x: hidden; }
+        #sidebar { min-width: 250px; max-width: 250px; background-color: #0f172a; min-height: 100vh; position: fixed; z-index: 1000; transition: all 0.3s;}
+        #sidebar.collapsed { min-width: 80px; max-width: 80px; }
+        #sidebar .sidebar-header { padding: 20px; color: white; border-bottom: 1px solid #1e293b; height: 70px; display: flex; align-items: center; justify-content: center;}
+        #sidebar.collapsed .logo-text { display: none; }
+        #sidebar ul.components { padding: 20px 0; margin: 0;}
+        #sidebar ul li a { padding: 15px 20px; display: block; color: #94a3b8; text-decoration: none; display: flex; align-items: center; transition: 0.2s;}
+        #sidebar ul li a:hover, #sidebar ul li.active > a { color: #fff; background: #1e293b; border-left: 4px solid #3b82f6; }
+        #sidebar ul li a i { margin-right: 15px; font-size: 1.2rem; width: 20px; text-align: center; }
+        #sidebar.collapsed ul li a span { display: none; }
+        #content { width: calc(100% - 250px); margin-left: 250px; transition: all 0.3s; min-height: 100vh; }
+        #sidebar.collapsed + #content { width: calc(100% - 80px); margin-left: 80px; }
+        .top-header { background: #fff; height: 70px; padding: 0 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 999; }
+        .btn-toggle { background: transparent; border: none; font-size: 1.3rem; color: #64748b; cursor: pointer;}
+        .station-select { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 12px; font-weight: 600; color: #334155; font-size: 0.9rem;}
 
-    /* Đảm bảo nội dung chính có độ nổi bật */
-    .section-card {
-        background: rgba(255, 255, 255, 0.95); /* Làm card hơi trong suốt một chút cho đẹp */
-        backdrop-filter: blur(5px); /* Hiệu ứng kính mờ (glassmorphism) */
-        border-radius: 15px;
-        border: none;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
-    }
-</style>
+        /* CSS RIÊNG HOTSPOT */
+        .panel-box { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.02); }
+        .camera-container { background: #000; border-radius: 10px; overflow: hidden; position: relative; border: 2px solid #334155; display: flex; align-items: center; justify-content: center; min-height: 450px;}
+        .live-badge { position: absolute; top: 15px; right: 15px; background: rgba(239, 68, 68, 0.9); color: white; padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; z-index: 10; display: flex; align-items: center;}
+        .live-badge i { font-size: 0.5rem; margin-right: 6px; animation: blink 1s infinite; }
+        @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.2;} 100% {opacity: 1;} }
+        
+        .alert-item { padding: 15px; border-radius: 8px; border-left: 4px solid #ef4444; background: #fef2f2; margin-bottom: 15px;}
+        .alert-item.safe { border-left-color: #10b981; background: #ecfdf5; }
+    </style>
 </head>
-<body class="bg-light">
-    <div class="bg-image-overlay"></div>
+<body>
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top" style="background-color: #000000 !important;">
-  <div class="container-fluid">
-    <a class="navbar-brand fw-bolder" href="/" style="letter-spacing: 1.5px;">A S P C</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarHotspot">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarHotspot">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        <li class="nav-item"><a class="nav-link active" href="./index.html">Dashboard</a></li>
-        <li class="nav-item"><a class="nav-link" href="./history.html">Lịch Sử</a></li>
-        <li class="nav-item"><a class="nav-link" href="./parameter.html">Thông Số</a></li>
-        <li class="nav-item"><a class="nav-link" href="./health.html">Sức Khỏe & Báo Cáo</a></li>
-        <li class="nav-item"><a class="nav-link" href="./weather.html">Dự Báo Thời Tiết</a> </li>
-        <li class="nav-item"><a class="nav-link active" href="./hotspot.html">Điểm Nóng</a></li>
-      </ul>
-      <span class="navbar-text text-light">
-        <i class="fas fa-microchip me-1 text-primary"></i> AI Predictive Maintenance
-      </span>
-    </div>
-  </div>
-</nav>
+    <nav id="sidebar">
+        <div class="sidebar-header"><h3 class="logo-text fw-bold m-0"><i class="fas fa-solar-panel text-primary"></i> ASPC</h3></div>
+        <ul class="list-unstyled components">
+            <li><a href="index.html"><i class="fas fa-th-large"></i> <span>Tổng Quan</span></a></li>
+            <li><a href="weather.html"><i class="fas fa-cloud-sun-rain"></i> <span>Dự Báo Thời Tiết</span></a></li>
+            <li><a href="health.html"><i class="fas fa-heartbeat"></i> <span>Sức Khỏe Pin</span></a></li>
+            <li class="active"><a href="hotspot.html"><i class="fas fa-fire"></i> <span>Điểm Nóng AI</span></a></li>
+            <li><a href="history.html"><i class="fas fa-history"></i> <span>Lịch Sử Lệnh</span></a></li>
+            <li><a href="parameter.html"><i class="fas fa-cog"></i> <span>Cấu Hình</span></a></li>
+        </ul>
+    </nav>
 
-
-
-<main class="container mt-5 pt-5">
-    <div id="ai-alert-container" class="mb-4"></div>
-    <!-- [MỚI] Khu vực hiển thị cảnh báo bảo vệ -->
-    <div id="alert-container" class="alert-overlay">
-        <h5 class="alert-title">🚨 Cảnh Báo Bảo Vệ</h5>
-        <div id="alert-list"></div>
-    </div>
-
-    <div class="row g-4">
-        <div class="col-lg-5">
-            <div id="main-card" class="risk-card text-center h-100 d-flex flex-column justify-content-center">
-                <h5 class="text-muted text-uppercase fw-bold mb-3">Rủi ro Điểm Nóng (Hotspot)</h5>
-                
-                <div class="risk-value-container">
-                    <span class="risk-value" id="risk-display">0</span>
-                    <span class="risk-unit">%</span>
-                </div>
-
-                <div class="mt-3">
-                    <span id="status-badge" class="badge-custom badge bg-success">
-                        <i class="fas fa-check-circle"></i> Hệ thống an toàn
-                    </span>
-                </div>
-                
-                <div class="mt-4 pt-3 border-top">
-                    <small class="text-muted">
-                        <i class="fas fa-clock"></i> Cập nhật: <span id="last-update">Vừa xong</span>
-                    </small>
-                </div>
+    <div id="content">
+        <div class="top-header">
+            <div>
+                <button type="button" id="sidebarCollapse" class="btn-toggle"><i class="fas fa-bars"></i></button>
+                <span class="ms-3 fw-bold text-secondary" style="font-size: 1.1rem;">Computer Vision</span>
+            </div>
+            <div class="d-flex align-items-center">
+                <select id="station-selector" class="form-select station-select me-3" onchange="changeStation(this.value)">
+                    <option value="ESP32_DEFAULT">📍 Trạm Sài Gòn</option>
+                </select>
+                <!-- DROPDOWN PROFILE NGƯỜI DÙNG -->
+<div class="dropdown ms-3">
+    <a href="#" class="d-flex align-items-center text-decoration-none" id="dropdownUser" data-bs-toggle="dropdown" aria-expanded="false">
+        <!-- Tự động lấy tên User từ Session để tạo Avatar -->
+        <img src="https://ui-avatars.com/api/?name={{ session.get('username', 'U') }}&background=3b82f6&color=fff&bold=true" alt="Avatar" width="40" height="40" class="rounded-circle shadow-sm border border-2 border-white">
+    </a>
+    
+    <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 mt-2" aria-labelledby="dropdownUser" style="min-width: 250px; border-radius: 12px;">
+        <!-- Phần Header của Menu -->
+        <li class="px-4 py-3 border-bottom text-center bg-light" style="border-radius: 12px 12px 0 0;">
+            <img src="https://ui-avatars.com/api/?name={{ session.get('username', 'U') }}&background=3b82f6&color=fff&bold=true" alt="Avatar" width="60" height="60" class="rounded-circle mb-2 shadow-sm">
+            <h6 class="fw-bold mb-0 text-dark" style="word-break: break-all;">{{ session.get('username', 'Người dùng') }}</h6>
+            <span class="badge bg-success mt-2">Tài khoản Pro</span>
+        </li>
+        
+        <!-- Các nút chức năng -->
+        <li class="mt-2"><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-id-card me-2 text-primary"></i> Quản lý hồ sơ</a></li>
+        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-camera me-2 text-info"></i> Đổi ảnh đại diện</a></li>
+        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-cog me-2 text-secondary"></i> Cài đặt bảo mật</a></li>
+        
+        <li><hr class="dropdown-divider my-2"></li>
+        
+        <!-- Nút Đăng Xuất gọi về hàm /logout trong app.py -->
+        <li class="mb-1"><a class="dropdown-item py-2 fw-bold text-danger" href="/logout"><i class="fas fa-sign-out-alt me-2"></i> Đăng xuất ngay</a></li>
+    </ul>
+</div>
             </div>
         </div>
 
-        <div class="col-lg-7">
-            <div class="risk-card h-100">
-                <h5 class="fw-bold mb-4">
-                    <i class="fas fa-brain text-primary me-2"></i>Chẩn đoán chuyên sâu từ AI
-                </h5>
-                
-                <div class="diagnosis-item mb-4">
-                    <label class="text-muted d-block small fw-bold">NGUYÊN NHÂN DỰ KIẾN</label>
-                    <p class="fs-5 mb-0" id="hotspot-reason">Đang thu thập dữ liệu cảm biến...</p>
-                </div>
-
-                <div class="diagnosis-item mb-4">
-                    <label class="text-muted d-block small fw-bold">HÀNH ĐỘNG KHUYẾN NGHỊ</label>
-                    <div class="p-3 bg-light border-start border-4 border-primary rounded">
-                        <p class="mb-0" id="hotspot-action">Hệ thống đang ở trạng thái lý tưởng.</p>
+        <div class="container-fluid p-4">
+            <h5 class="fw-bold mb-3"><i class="fas fa-camera text-danger me-2"></i> Giám Sát Bề Mặt (Thermal Vision)</h5>
+            
+            <div class="row g-4">
+                <!-- KHỐI CAMERA -->
+                <div class="col-lg-8">
+                    <div class="panel-box h-100 p-2">
+                        <div class="camera-container">
+                            <div class="live-badge"><i class="fas fa-circle"></i> LIVE AI REC</div>
+                            <!-- Liên kết thẳng tới stream của Backend OpenCV -->
+                            <img src="/video_feed" id="thermal-camera" class="img-fluid" style="width:100%; height:100%; object-fit: cover;" alt="Đang khởi động Camera AI...">
+                        </div>
+                        <div class="d-flex justify-content-between mt-3 px-2 text-muted small fw-bold">
+                            <span>FPS: 30</span>
+                            <span>Model: YOLOv8_Thermal</span>
+                        </div>
                     </div>
                 </div>
 
-                <div class="row mt-4 pt-2 border-top">
-                    <div class="col-6">
-                        <small class="text-muted d-block">Chênh lệch nhiệt (<span title="Sự chênh lệch nhiệt độ giữa điểm nóng nhất và nhiệt độ trung bình của tấm pin" style="cursor: help; border-bottom: 1px dotted #999;">ΔT</span>)</small>
-                        <span class="fw-bold fs-5 text-dark"><span id="delta-t">0.0</span>°C</span>
-                    </div>
-                    <div class="col-6 text-end">
-                        <small class="text-muted d-block">Mô hình AI</small>
-                        <span class="badge bg-dark">Physics-Informed LSTM</span>
+                <!-- KHỐI CẢNH BÁO -->
+                <div class="col-lg-4">
+                    <div class="panel-box h-100">
+                        <h6 class="fw-bold border-bottom pb-3 mb-3"><i class="fas fa-bell text-warning me-2"></i> Trạng Thái Quét Cục Bộ</h6>
+                        
+                        <div id="hotspot-status-box">
+                            <div class="alert-item safe">
+                                <div class="fw-bold text-success mb-1"><i class="fas fa-check-circle me-1"></i> Bề mặt an toàn</div>
+                                <span class="small text-muted">Hệ thống AI đang liên tục quét và phân tích. Chưa phát hiện điểm nóng bất thường.</span>
+                            </div>
+                        </div>
+
+                        <hr class="my-4 border-secondary-subtle">
+                        
+                        <h6 class="fw-bold text-secondary mb-3">Tỷ Lệ Bao Phủ Bụi Ước Tính</h6>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="small fw-bold">Bụi (Dust Level):</span>
+                            <span class="badge bg-secondary" id="ai-dust-val">0%</span>
+                        </div>
+                        <div class="progress" style="height: 8px;">
+                            <div id="ai-dust-bar" class="progress-bar bg-secondary" role="progressbar" style="width: 0%;"></div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</main>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="{{ url_for('static', filename='js/hotspot.js') }}"></script>
+    <script>
+        document.getElementById('sidebarCollapse').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('collapsed'));
+        document.addEventListener("DOMContentLoaded", () => { 
+            const s = document.getElementById('station-selector'); 
+            if(s) s.value = localStorage.getItem('device_id') || 'ESP32_DEFAULT'; 
+        });
+        function changeStation(mac) { localStorage.setItem('device_id', mac); window.location.reload(); }
 
+        // Bắt Socket để nhảy cảnh báo nếu có Hotspot
+        const socket = io();
+        socket.on('sensor_data', (data) => {
+            if(data.dust_level !== undefined) {
+                document.getElementById('ai-dust-val').innerText = data.dust_level.toFixed(1) + '%';
+                document.getElementById('ai-dust-bar').style.width = data.dust_level + '%';
+            }
+            
+            // Xử lý hiện thẻ cảnh báo nếu có Hotspot
+            const box = document.getElementById('hotspot-status-box');
+            if(data.hotspot_detected) {
+                box.innerHTML = `
+                    <div class="alert-item" style="animation: pulse 1s infinite alternate;">
+                        <div class="fw-bold text-danger mb-1"><i class="fas fa-fire me-1"></i> PHÁT HIỆN ĐIỂM NÓNG!</div>
+                        <span class="small text-danger">AI phát hiện vùng nhiệt độ chênh lệch bất thường. Nguy cơ cháy nổ! Bơm sẽ tự kích hoạt nếu ở chế độ Smart.</span>
+                    </div>
+                `;
+            } else {
+                box.innerHTML = `
+                    <div class="alert-item safe">
+                        <div class="fw-bold text-success mb-1"><i class="fas fa-check-circle me-1"></i> Bề mặt an toàn</div>
+                        <span class="small text-muted">Không phát hiện điểm nóng. Bề mặt tản nhiệt đồng đều.</span>
+                    </div>
+                `;
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

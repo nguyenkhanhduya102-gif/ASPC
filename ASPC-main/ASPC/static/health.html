@@ -3,178 +3,330 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sức Khỏe Hệ Thống - ASPC</title>
+    <title>Sức Khỏe & Báo Cáo | ASPC Pro</title>
     
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style_index.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style_health.css') }}">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/js/all.min.js" defer></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* ================= LAYOUT CHUNG ================= */
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #1e293b; overflow-x: hidden; }
+        #sidebar { min-width: 250px; max-width: 250px; background-color: #0f172a; min-height: 100vh; position: fixed; z-index: 1000; transition: all 0.3s;}
+        #sidebar.collapsed { min-width: 80px; max-width: 80px; }
+        #sidebar .sidebar-header { padding: 20px; color: white; border-bottom: 1px solid #1e293b; height: 70px; display: flex; align-items: center; justify-content: center;}
+        #sidebar.collapsed .logo-text { display: none; }
+        #sidebar ul.components { padding: 20px 0; margin: 0; }
+        #sidebar ul li a { padding: 15px 20px; display: block; color: #94a3b8; text-decoration: none; display: flex; align-items: center; transition: 0.2s;}
+        #sidebar ul li a:hover, #sidebar ul li.active > a { color: #fff; background: #1e293b; border-left: 4px solid #3b82f6; }
+        #sidebar ul li a i { margin-right: 15px; font-size: 1.2rem; width: 20px; text-align: center; }
+        #sidebar.collapsed ul li a span { display: none; }
+        #content { width: calc(100% - 250px); margin-left: 250px; transition: all 0.3s; min-height: 100vh; }
+        #sidebar.collapsed + #content { width: calc(100% - 80px); margin-left: 80px; }
+        .top-header { background: #fff; height: 70px; padding: 0 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 999; }
+        .btn-toggle { background: transparent; border: none; font-size: 1.3rem; color: #64748b; cursor: pointer;}
+        .station-select { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 12px; font-weight: 600; color: #334155; font-size: 0.9rem;}
+
+        /* ================= CSS RIÊNG TRANG HEALTH ================= */
+        .panel-box { background: #fff; border-radius: 12px; padding: 25px; box-shadow: 0 2px 10px rgba(0,0,0,0.02); margin-bottom: 20px; border: 1px solid #f1f5f9; }
+        
+        /* Vòng tròn sức khỏe */
+        .health-gauge-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center;}
+        .progress-circle { width: 160px; height: 160px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: conic-gradient(#cbd5e1 0%, #cbd5e1 100%); position: relative; margin-bottom: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); transition: background 0.5s ease;}
+        .progress-circle::after { content: ""; width: 130px; height: 130px; background: #fff; border-radius: 50%; position: absolute; }
+        .health-value { position: relative; z-index: 1; font-size: 2.2rem; font-weight: 800; color: #0f172a; }
+        .status-badge { display: inline-block; padding: 6px 16px; border-radius: 30px; font-size: 0.9rem; font-weight: 600; color: white; background: #64748b; margin-bottom: 10px;}
+        
+        /* Thẻ thông số (Grid) */
+        .metric-card { background: #f8fafc; border-radius: 10px; padding: 15px; display: flex; align-items: center; height: 100%; border: 1px solid #e2e8f0;}
+        .metric-icon { width: 50px; height: 50px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; margin-right: 15px; }
+        .metric-label { font-size: 0.8rem; color: #64748b; font-weight: 600; text-transform: uppercase; margin-bottom: 5px; }
+        .metric-value { font-size: 1.3rem; font-weight: 700; color: #0f172a; margin: 0; }
+
+        /* ================= BÁO CÁO THÁNG (GIAO DIỆN SÁNG CHUYÊN NGHIỆP) ================= */
+        .report-panel { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.03); }
+        .report-card { background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 12px; padding: 25px; transition: all 0.3s ease; height: 100%; display: flex; flex-direction: column; justify-content: space-between; border-left: 4px solid transparent;}
+        .report-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.05); }
+        .report-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; margin-bottom: 15px; }
+        .report-title { font-size: 0.85rem; color: #64748b; font-weight: 600; text-transform: uppercase; margin-bottom: 5px;}
+        .report-number { font-size: 2rem; font-weight: 800; color: #0f172a; margin: 0;}
+        
+        /* Màu viền thẻ báo cáo */
+        .border-energy { border-left-color: #0ea5e9; }
+        .border-profit { border-left-color: #10b981; }
+        .border-health { border-left-color: #8b5cf6; }
+        .border-records { border-left-color: #f59e0b; }
+    </style>
 </head>
 <body>
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="/">A S P C</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="navbarSupportedContent">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        <li class="nav-item"><a class="nav-link" href="./index.html">Dashboard</a></li>
-        <li class="nav-item"><a class="nav-link" href="./history.html">Lịch Sử</a></li>
-        <li class="nav-item"><a class="nav-link" href="./parameter.html">Thông Số</a></li>
-        <li class="nav-item"><a class="nav-link active" href="./health.html">Sức Khỏe & Báo Cáo</a></li>
-        <li class="nav-item"><a class="nav-link" href="./weather.html">Dự Báo Thời tiết</a></li>
-        <li class="nav-item"><a class="nav-link" href="./hotspot.html">Điểm Nóng</a></li>
-      </ul>
-    </div>
-  </div>
-</nav>
+    <!-- SIDEBAR -->
+    <nav id="sidebar">
+        <div class="sidebar-header"><h3 class="logo-text fw-bold m-0"><i class="fas fa-solar-panel text-primary"></i> ASPC</h3></div>
+        <ul class="list-unstyled components">
+            <li><a href="index.html"><i class="fas fa-th-large"></i> <span>Tổng Quan</span></a></li>
+            <li><a href="weather.html"><i class="fas fa-cloud-sun-rain"></i> <span>Dự Báo Thời Tiết</span></a></li>
+            <li class="active"><a href="health.html"><i class="fas fa-heartbeat"></i> <span>Sức Khỏe Pin</span></a></li>
+            <li><a href="hotspot.html"><i class="fas fa-fire"></i> <span>Điểm Nóng AI</span></a></li>
+            <li><a href="history.html"><i class="fas fa-history"></i> <span>Lịch Sử Lệnh</span></a></li>
+            <li><a href="parameter.html"><i class="fas fa-cog"></i> <span>Cấu Hình</span></a></li>
+        </ul>
+    </nav>
 
-<main class="container">
-    <h2 style="margin-top: 20px;"><i class="fas fa-heartbeat"></i> Đánh Giá Sức Khỏe Tấm Pin</h2>
 
-    <div class="section-card health-gauge">
-        <div class="progress-circle" id="health-circle">
-            <span class="health-value" id="health-percent">--%</span>
-        </div>
-        <h3>Tình Trạng: <span id="health-status" class="status-badge" style="background: gray;">Đang tải...</span></h3>
-        <p id="health-advice" style="margin-top: 10px; font-style: italic;">Đang kết nối tới AI Engine...</p>
-    </div>
-
-    <div class="metrics-grid">
-        <div class="metric-card">
-            <div class="icon-circle" style="color: #28a745; background: rgba(40, 167, 69, 0.1);"><i class="fas fa-bolt"></i></div>
-            <div>
-                <p class="metric-label">Công Suất Thực Tế</p>
-                <p class="metric-value" id="p-actual">-- W</p>
+    <!-- CONTENT AREA -->
+    <div id="content">
+        <!-- TOP NAV -->
+        <div class="top-header">
+            <div class="d-flex align-items-center">
+                <button type="button" id="sidebarCollapse" class="btn-toggle"><i class="fas fa-bars"></i></button>
+                <span class="ms-3 fw-bold text-secondary" style="font-size: 1.1rem;">Sức Khỏe & Báo Cáo</span>
             </div>
+            <div class="d-flex align-items-center">
+                <select id="station-selector" class="form-select station-select me-3" onchange="changeStation(this.value)">
+                    <option value="ESP32_DEFAULT">📍 Trạm Sài Gòn (Mặc định)</option>
+                    <option value="ESP32_002">📍 Trạm Đà Lạt</option>
+                </select>
+            
+                <!-- DROPDOWN PROFILE NGƯỜI DÙNG -->
+<div class="dropdown ms-3">
+    <a href="#" class="d-flex align-items-center text-decoration-none" id="dropdownUser" data-bs-toggle="dropdown" aria-expanded="false">
+        <!-- Tự động lấy tên User từ Session để tạo Avatar -->
+        <img src="https://ui-avatars.com/api/?name={{ session.get('username', 'U') }}&background=3b82f6&color=fff&bold=true" alt="Avatar" width="40" height="40" class="rounded-circle shadow-sm border border-2 border-white">
+    </a>
+    
+    <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 mt-2" aria-labelledby="dropdownUser" style="min-width: 250px; border-radius: 12px;">
+        <!-- Phần Header của Menu -->
+        <li class="px-4 py-3 border-bottom text-center bg-light" style="border-radius: 12px 12px 0 0;">
+            <img src="https://ui-avatars.com/api/?name={{ session.get('username', 'U') }}&background=3b82f6&color=fff&bold=true" alt="Avatar" width="60" height="60" class="rounded-circle mb-2 shadow-sm">
+            <h6 class="fw-bold mb-0 text-dark" style="word-break: break-all;">{{ session.get('username', 'Người dùng') }}</h6>
+            <span class="badge bg-success mt-2">Tài khoản Pro</span>
+        </li>
+        
+        <!-- Các nút chức năng -->
+        <li class="mt-2"><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-id-card me-2 text-primary"></i> Quản lý hồ sơ</a></li>
+        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-camera me-2 text-info"></i> Đổi ảnh đại diện</a></li>
+        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-cog me-2 text-secondary"></i> Cài đặt bảo mật</a></li>
+        
+        <li><hr class="dropdown-divider my-2"></li>
+        
+        <!-- Nút Đăng Xuất gọi về hàm /logout trong app.py -->
+        <li class="mb-1"><a class="dropdown-item py-2 fw-bold text-danger" href="/logout"><i class="fas fa-sign-out-alt me-2"></i> Đăng xuất ngay</a></li>
+    </ul>
+    </div>
+</div>
         </div>
 
-        <div class="metric-card">
-            <div class="icon-circle" style="color: #17a2b8; background: rgba(23, 162, 184, 0.1);"><i class="fas fa-calculator"></i></div>
-            <div>
-                <p class="metric-label">Công Suất Lý Thuyết</p>
-                <p class="metric-value" id="p-theory">-- W</p>
-                <p style="font-size: 0.8em; color: gray; margin: 0;">(Dựa trên Lux & Pmax)</p>
+
+
+        <!-- MAIN DASHBOARD -->
+        <div class="container-fluid p-4">
+            
+            <!-- PHẦN 1: GIÁM SÁT THỜI GIAN THỰC -->
+            <h5 class="fw-bold mb-3"><i class="fas fa-satellite-dish text-primary me-2"></i> Giám Sát Thời Gian Thực</h5>
+            <div class="row mb-4">
+                <div class="col-lg-4 mb-3">
+                    <div class="panel-box h-100 health-gauge-container">
+                        <div class="progress-circle" id="health-circle">
+                            <span class="health-value" id="health-percent">--%</span>
+                        </div>
+                        <div id="health-status" class="status-badge">Đang tải...</div>
+                        <p id="health-advice" class="text-muted small mt-2 m-0" style="font-style: italic;">Đang kết nối tới AI Engine...</p>
+                    </div>
+                </div>
+
+                <div class="col-lg-8 mb-3">
+                    <div class="panel-box h-100">
+                        <div class="row g-3 h-100">
+                            <div class="col-md-6">
+                                <div class="metric-card">
+                                    <div class="metric-icon" style="background:#ecfdf5; color:#10b981;"><i class="fas fa-bolt"></i></div>
+                                    <div><p class="metric-label">Công Suất Thực Tế</p><p class="metric-value" id="p-actual">-- W</p></div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="metric-card">
+                                    <div class="metric-icon" style="background:#eff6ff; color:#3b82f6;"><i class="fas fa-chart-line"></i></div>
+                                    <div><p class="metric-label">Công Suất Lý Thuyết</p><p class="metric-value" id="p-theory">-- W</p></div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="metric-card">
+                                    <div class="metric-icon" style="background:#fef2f2; color:#ef4444;"><i class="fas fa-arrow-down"></i></div>
+                                    <div><p class="metric-label">Tổn Thất Hiện Tại</p><p class="metric-value text-danger" id="power-loss">-- %</p></div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="metric-card">
+                                    <div class="metric-icon" style="background:#fffbeb; color:#f59e0b;"><i class="fas fa-sun"></i></div>
+                                    <div><p class="metric-label">Bức Xạ Ánh Sáng</p><p class="metric-value" id="health-lux">-- Lux</p></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
 
-        <div class="metric-card">
-            <div class="icon-circle" style="color: #ffc107; background: rgba(255, 193, 7, 0.1);"><i class="fas fa-sun"></i></div>
-            <div>
-                <p class="metric-label">Cường Độ Sáng</p>
-                <p class="metric-value" id="health-lux">-- Lux</p>
+            <!-- PHẦN 2: BÁO CÁO KINH TẾ (GIAO DIỆN SÁNG CHUYÊN NGHIỆP) -->
+            <h5 class="fw-bold mb-3 mt-4"><i class="fas fa-chart-bar text-success me-2"></i> Báo Cáo Tổng Hợp Trong Tháng</h5>
+            <div class="report-panel mb-4">
+                
+                                <!-- Thanh công cụ lọc Báo cáo -->
+                <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 pb-3 border-bottom">
+                    <div>
+                        <h6 class="m-0 fw-bold text-dark">Dữ liệu phân tích từ AI Engine</h6>
+                        <small class="text-muted">Cập nhật theo thời gian thực dựa trên CSDL lưu trữ</small>
+                    </div>
+                    <!-- CỤM LỌC VÀ NÚT BẤM -->
+                    <div class="d-flex align-items-center gap-2 mt-2 mt-md-0">
+                        <select id="reportMonth" class="form-select bg-light border-secondary-subtle fw-semibold">
+                            <option value="1">Tháng 1</option> <option value="2">Tháng 2</option> <option value="3">Tháng 3</option>
+                            <option value="4">Tháng 4</option> <option value="5">Tháng 5</option> <option value="6">Tháng 6</option>
+                            <option value="7">Tháng 7</option> <option value="8">Tháng 8</option> <option value="9">Tháng 9</option>
+                            <option value="10">Tháng 10</option> <option value="11">Tháng 11</option> <option value="12">Tháng 12</option>
+                        </select>
+                        <select id="reportYear" class="form-select bg-light border-secondary-subtle fw-semibold">
+                            <option value="2025">2025</option> <option value="2026" selected>2026</option>
+                        </select>
+                        <!-- NÚT BẤM XUẤT BÁO CÁO -->
+                        <button class="btn btn-primary text-nowrap shadow-sm px-4" onclick="fetchMonthlyReport()">
+                            <i class="fas fa-filter me-2"></i>Xuất Báo Cáo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Lưới thông số (4 Thẻ) -->
+                <div class="row g-4">
+                    <!-- Thẻ 1: Năng lượng -->
+                    <div class="col-xl-3 col-md-6">
+                        <div class="report-card border-energy">
+                            <div>
+                                <div class="report-icon" style="background: #e0f2fe; color: #0284c7;"><i class="fas fa-bolt"></i></div>
+                                <div class="report-title">Tổng Điện Thu Hồi Thêm</div>
+                            </div>
+                            <h2 class="report-number text-primary" id="rep-energy">0.0 <span class="fs-6 text-muted fw-normal">kWh</span></h2>
+                        </div>
+                    </div>
+                    <!-- Thẻ 2: Kinh tế -->
+                    <div class="col-xl-3 col-md-6">
+                        <div class="report-card border-profit">
+                            <div>
+                                <div class="report-icon" style="background: #dcfce7; color: #16a34a;"><i class="fas fa-money-bill-wave"></i></div>
+                                <div class="report-title">Tiền Tiết Kiệm Quy Đổi</div>
+                            </div>
+                            <h2 class="report-number text-success" id="rep-profit">0 <span class="fs-6 text-muted fw-normal">VNĐ</span></h2>
+                        </div>
+                    </div>
+                    <!-- Thẻ 3: Sức khỏe -->
+                    <div class="col-xl-3 col-md-6">
+                        <div class="report-card border-health">
+                            <div>
+                                <div class="report-icon" style="background: #f3e8ff; color: #7c3aed;"><i class="fas fa-heartbeat"></i></div>
+                                <div class="report-title">Sức Khỏe TB Của Pin</div>
+                            </div>
+                            <h2 class="report-number" style="color: #7c3aed;" id="rep-health">0 <span class="fs-6 text-muted fw-normal">%</span></h2>
+                        </div>
+                    </div>
+                    <!-- Thẻ 4: Bản ghi -->
+                    <div class="col-xl-3 col-md-6">
+                        <div class="report-card border-records">
+                            <div>
+                                <div class="report-icon" style="background: #fef3c7; color: #d97706;"><i class="fas fa-database"></i></div>
+                                <div class="report-title">Số Lần Lấy Mẫu Phân Tích</div>
+                            </div>
+                            <h2 class="report-number text-warning" id="rep-records">0 <span class="fs-6 text-muted fw-normal">lần</span></h2>
+                        </div>
+                    </div>
+                </div>
+
             </div>
-        </div>
+        </div> <!-- End Container -->
+    </div> <!-- End Content -->
 
-        <div class="metric-card">
-            <div class="icon-circle" style="color: #dc3545; background: rgba(220, 53, 69, 0.1);"><i class="fas fa-search-minus"></i></div>
-            <div>
-                <p class="metric-label">Tổn Thất Hiệu Suất</p>
-                <p class="metric-value" id="power-loss">-- %</p>
-            </div>
-        </div>
-    </div>
-
-  <section class="report-panel mt-4">
-  <div class="report-head">
-    <h3 class="report-title">Báo Cáo Kinh Tế & Sức Khỏe Theo Tháng</h3>
-    <p class="report-subtitle">Theo dõi hiệu quả vận hành và tình trạng tấm pin theo từng tháng.</p>
-  </div>
-
-  <form id="report-form" class="report-form-modern">
-    <div class="field">
-      <label for="year">Năm</label>
-      <input type="number" id="year" min="2020" max="2035" value="2026" />
-    </div>
-
-    <div class="field">
-      <label for="month">Tháng</label>
-      <input type="number" id="month" min="1" max="12" value="3" />
-    </div>
-
-    <button type="submit" class="btn-report">Xuất Báo Cáo</button>
-  </form>
-
-  <div id="economic-report" class="report-result">
-    <div class="empty-state">Chọn năm/tháng và nhấn <strong>Xuất Báo Cáo</strong>.</div>
-  </div>
-</section>
-</main>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
-<script src="{{ url_for('static', filename='js/health.js') }}"></script>
-<script>
-// [MỚI] Tự động load báo cáo tháng hiện tại khi load trang
-document.addEventListener('DOMContentLoaded', function() {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1;  // JS month 0-based
-    loadReport(currentYear, currentMonth);
-    document.getElementById('year').value = currentYear;
-    document.getElementById('month').value = currentMonth;
-});
-
-
-
-// Hàm load báo cáo
-function loadReport(year, month) {
-    fetch(`/api/economic_report/${year}/${month}`)
-        .then(response => response.json())
-        .then(data => {
-            const box = document.getElementById('economic-report');
-
-            if (data.error) {
-                box.innerHTML = `<p class="text-danger">Lỗi: ${data.error}</p>`;
-                return;
-            }
-
-            // Hỗ trợ cả 2 kiểu JSON:
-            // 1) nested: { economic: {...}, health: {...} }
-            // 2) flat:   { total_profit, total_energy_saved, ... }
-            const profit = Number(data?.economic?.total_profit ?? data?.total_profit ?? 0);
-            const saved = Number(data?.economic?.total_energy_saved ?? data?.total_energy_saved ?? 0);
-            const avgHealth = Number(data?.health?.avg_health_score ?? 0);
-            const totalRecords = Number(data?.health?.total_records ?? 0);
-            const goodDays = Number(data?.health?.good_days ?? 0);
-            const badDays = Number(data?.health?.bad_days ?? 0);
-
-            box.innerHTML = `
-  <h5>Tháng: ${data.month ?? '--'}</h5>
-
-  <div class="report-split">
-    <div class="report-block economic">
-      <p class="report-block-title">💰 Kinh Tế</p>
-      <p><strong>Tổng Lợi Nhuận:</strong> ${profit.toFixed(2)} VND</p>
-      <p><strong>Tổng Năng Lượng Tiết Kiệm:</strong> ${saved.toFixed(2)} kWh</p>
-    </div>
-
-    <div class="report-block health">
-      <p class="report-block-title">🩺 Sức Khỏe Tấm Pin</p>
-      <p><strong>Điểm Sức Khỏe Trung Bình:</strong> ${avgHealth.toFixed(2)}%</p>
-      <p><strong>Tổng Bản Ghi:</strong> ${totalRecords}</p>
-      <p><strong>Ngày Tốt:</strong> ${goodDays} | <strong>Ngày Xấu:</strong> ${badDays}</p>
-    </div>
-  </div>
-`;
-        })
-        .catch(err => {
-            document.getElementById('economic-report').innerHTML =
-                `<p class="text-danger">Lỗi kết nối: ${err.message}</p>`;
+    <!-- ================= SCRIPT XỬ LÝ GIAO DIỆN & BÁO CÁO ================= -->
+    <script>
+        // Xử lý Sidebar
+        document.getElementById('sidebarCollapse').addEventListener('click', function () {
+            document.getElementById('sidebar').classList.toggle('collapsed');
         });
-}
+
+        // Tải trạm và thiết lập tháng/năm hiện tại
+        document.addEventListener("DOMContentLoaded", function() {
+            const savedMac = localStorage.getItem('device_id') || 'ESP32_DEFAULT';
+            const selector = document.getElementById('station-selector');
+            if(selector) selector.value = savedMac;
+
+            const now = new Date();
+            document.getElementById('reportMonth').value = now.getMonth() + 1;
+            document.getElementById('reportYear').value = now.getFullYear();
+            
+            // Gọi API lần đầu
+            fetchMonthlyReport();
+        });
+
+        function changeStation(macAddress) {
+            localStorage.setItem('device_id', macAddress);
+            window.location.reload();
+        }
 
 
 
-// Xử lý form
-document.getElementById('report-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const year = document.getElementById('year').value;
-    const month = document.getElementById('month').value;
-    loadReport(year, month);
-});
-</script>
+
+        // HÀM GỌI API LẤY BÁO CÁO THÁNG (CẬP NHẬT 4 THÔNG SỐ TỪ APP.PY)
+                // HÀM GỌI API LẤY BÁO CÁO THÁNG
+        function fetchMonthlyReport() {
+            const month = document.getElementById('reportMonth').value;
+            const year = document.getElementById('reportYear').value;
+            
+            // Hiệu ứng Loading
+            const spinner = '<i class="fas fa-spinner fa-spin text-secondary fs-4"></i>';
+            document.getElementById('rep-energy').innerHTML = spinner;
+            document.getElementById('rep-profit').innerHTML = spinner;
+            document.getElementById('rep-health').innerHTML = spinner;
+            document.getElementById('rep-records').innerHTML = spinner;
+
+            fetch(`/api/monthly_report/${year}/${month}`)
+                .then(response => {
+                    if(!response.ok) throw new Error("API chưa sẵn sàng hoặc sai đường dẫn");
+                    return response.json();
+                })
+                .then(data => {
+                    let energy = 0, profit = 0, health = 0, records = 0;
+                    
+                    if (data.economic && data.health) {
+                        energy = data.economic.total_energy_saved || 0;
+                        profit = data.economic.total_profit || 0;
+                        health = data.health.avg_health_score || 0;
+                        records = data.health.total_records || 0;
+                    }
+
+                    document.getElementById('rep-energy').innerHTML = energy.toFixed(2) + ' <span class="fs-6 text-muted fw-normal">kWh</span>';
+                    document.getElementById('rep-profit').innerHTML = Math.round(profit).toLocaleString('vi-VN') + ' <span class="fs-6 text-muted fw-normal">VNĐ</span>';
+                    document.getElementById('rep-health').innerHTML = health.toFixed(1) + ' <span class="fs-6 text-muted fw-normal">%</span>';
+                    document.getElementById('rep-records').innerHTML = records.toLocaleString('vi-VN') + ' <span class="fs-6 text-muted fw-normal">lần</span>';
+
+                    // --- MỚI: Hiệu ứng Flash khi load xong ---
+                    const cards = document.querySelectorAll('.report-card');
+                    cards.forEach(c => {
+                        c.style.opacity = '0.5';
+                        setTimeout(() => c.style.opacity = '1', 200);
+                    });
+                })
+                .catch(error => {
+                    console.error('Lỗi khi lấy báo cáo:', error);
+                    document.getElementById('rep-energy').innerHTML = '0.00 <span class="fs-6 text-muted fw-normal">kWh</span>';
+                    document.getElementById('rep-profit').innerHTML = '0 <span class="fs-6 text-muted fw-normal">VNĐ</span>';
+                    document.getElementById('rep-health').innerHTML = '0.0 <span class="fs-6 text-muted fw-normal">%</span>';
+                    document.getElementById('rep-records').innerHTML = '0 <span class="fs-6 text-muted fw-normal">lần</span>';
+                });
+        }
+    </script>
+    
+    <!-- Link file xử lý Socket của bạn -->
+    <script src="{{ url_for('static', filename='js/health.js') }}"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

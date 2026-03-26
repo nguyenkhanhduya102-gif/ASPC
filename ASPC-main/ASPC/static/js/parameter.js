@@ -25,7 +25,6 @@ document.addEventListener('DOMContentLoaded', function() {
  * Endpoint: GET /api/get_params
  */
 function loadSettingsFromAPI() {
-    // Hiển thị trạng thái đang tải (Optional UI polish)
     console.log("Đang tải cấu hình từ Server...");
 
     fetch(`/api/get_params?mac_address=${currentDeviceMac}`)
@@ -37,15 +36,20 @@ function loadSettingsFromAPI() {
             // Điền dữ liệu vào form (ID khớp với parameter.html)
             const pMaxInput = document.getElementById('p_max');
             const areaInput = document.getElementById('area');
+            const pPumpInput = document.getElementById('p_pump');
+            const monthlyKwhInput = document.getElementById('monthly_kwh');
+            const alphaInput = document.getElementById('alpha_p');
 
             if (pMaxInput) pMaxInput.value = data.p_max;
             if (areaInput) areaInput.value = data.area;
+            if (pPumpInput) pPumpInput.value = data.p_pump;
+            if (monthlyKwhInput) monthlyKwhInput.value = data.monthly_kwh;
+            if (alphaInput) alphaInput.value = data.alpha_p;
             
             console.log("✅ Đã tải thông số:", data);
         })
         .catch(err => {
             console.error("Lỗi tải thông số:", err);
-            // Không alert lỗi khi mới vào trang để tránh phiền, chỉ log console
         });
 }
 

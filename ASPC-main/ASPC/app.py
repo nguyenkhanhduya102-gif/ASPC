@@ -10,7 +10,9 @@ import sys
 import time
 from dotenv import load_dotenv
 import requests
-
+from flask import session, redirect, url_for, flash
+from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
 # Load biến môi trường từ file .env (cố định theo thư mục file này)
 try:
     _dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
@@ -99,7 +101,10 @@ ALERT_THRESHOLDS = {
 
 #Sử dụng database mới
 app = Flask(__name__, static_folder='static', template_folder='static')
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'default-secret-key-please-change')
+
+app.secret_key = os.getenv('SECRET_KEY', 'khoa_bi_mat_sieu_cap_aspc_2026')
+
+
 
 # BẮT ĐẦU THÊM CẤU HÌNH SQLALCHEMY 
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -975,6 +980,7 @@ def get_weather_api():
 
 
 
+
 # [API MỚI] Lấy thông số hiện tại để hiển thị lên form
 @app.route('/api/get_params', methods=['GET'])
 def get_params_api():
@@ -1003,17 +1009,118 @@ def get_params_api():
 
 
 
+
+
+
+
+
 # --- ROUTES & SOCKET EVENTS ---
+# --- CƠ CHẾ BẢO VỆ TRANG (LOGIN REQUIRED) ---
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Nếu chưa đăng nhập -> Đẩy về trang Login và báo lỗi
+        if 'user_id' not in session:
+            flash("Bạn cần đăng nhập để truy cập hệ thống!", "danger")
+            return redirect(url_for('login_page'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# --- ROUTES XỬ LÝ AUTHENTICATION ---
+@app.route('/login', methods=['GET', 'POST'])
+def login_page():
+    # Nếu đang có session (Đã đăng nhập), tự động vô Dashboard không cần đăng nhập lại
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
+
+    # Khi người dùng bấm nút Đăng Nhập
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        
+        # Tìm user trong DB
+        user = User.query.filter_by(username=username).first()
+        
+        # Kiểm tra đúng tài khoản & mật khẩu
+        if user and check_password_hash(user.password_hash, password):
+            session['user_id'] = user.id
+            session['username'] = user.username
+            return redirect(url_for('dashboard'))
+        else:
+            flash("Tên đăng nhập hoặc mật khẩu không chính xác!", "danger")
+            return redirect(url_for('login_page'))
+            
+    return render_template('login.html')
+
+@app.route('/register', methods=['POST'])
+def register():
+    username = request.form.get('reg_username')
+    password = request.form.get('reg_password')
+    
+    # Check trùng tên
+    existing_user = User.query.filter_by(username=username).first()
+    if existing_user:
+        flash("Tên tài khoản này đã có người sử dụng!", "danger")
+        return redirect(url_for('login_page'))
+        
+    if len(password) < 6:
+        flash("Mật khẩu phải dài ít nhất 6 ký tự!", "danger")
+        return redirect(url_for('login_page'))
+        
+    # Tạo acc mới
+    hashed_pw = generate_password_hash(password, method='pbkdf2:sha256')
+    new_user = User(username=username, password_hash=hashed_pw)
+    db.session.add(new_user)
+    db.session.commit()
+    
+    flash("Đăng ký thành công! Bạn có thể đăng nhập ngay.", "success")
+    return redirect(url_for('login_page'))
+
+@app.route('/logout')
+def logout():
+    session.clear() # Xóa phiên
+    return redirect(url_for('home'))
+
+# --- ROUTES GIAO DIỆN CHÍNH (ĐÃ KHÓA) ---
 @app.route('/')
-def home(): return render_template('home_page.html')
+def home(): 
+    return render_template('home_page.html')
+
 @app.route('/index.html')
-def dashboard(): return render_template('index.html')
+@login_required # <--- CHÍNH CÁI CHỮ NÀY LÀ Ổ KHÓA!
+def dashboard(): 
+    return render_template('index.html')
+
 @app.route('/health.html')
-def health(): return render_template('health.html')
+@login_required
+def health(): 
+    return render_template('health.html')
+
 @app.route('/history.html')
-def history(): return render_template('history.html')
+@login_required
+def history(): 
+    return render_template('history.html')
+
 @app.route('/parameter.html')
-def parameter(): return render_template('parameter.html')
+@login_required
+def parameter(): 
+    return render_template('parameter.html')
+
+@app.route('/hotspot.html')
+@login_required
+def hotspot_page(): 
+    return render_template('hotspot.html')
+
+@app.route('/weather.html')
+@login_required
+def weather_page(): 
+    return render_template('weather.html')
+
+
+
+
+
+
 
 @app.route('/api/get_history')
 def get_history_api():
@@ -1033,10 +1140,6 @@ def get_history_api():
     except Exception as e: 
         return jsonify([])
 
-
-@app.route('/hotspot.html')
-def hotspot_page(): 
-    return render_template('hotspot.html')
 @app.route('/api/economic_report/<int:year>/<int:month>')
 #Báo cáo kinh tế + Sức khỏe 
 def get_economic_report_api(year, month):
@@ -1052,6 +1155,9 @@ def get_economic_report_api(year, month):
     
 
 
+
+
+
 # [MỚI] Xử lý chuyển chế độ
 @socketio.on('switch_mode')
 def handle_switch_mode(data):
@@ -1064,7 +1170,7 @@ def handle_switch_mode(data):
 
 # [MỚI] Client mới vào thì gửi chế độ hiện tại
 @socketio.on('request_current_mode')
-def handle_request_mode():
+def handle_request_mode(data=None):
     emit('mode_update', {'mode': system_state['mode']})
 
 @socketio.on('send_control')
