@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản Lý Hồ Sơ | ASPC Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* CSS LAYOUT CHUNG */
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; color: #1e293b; overflow-x: hidden; }
+        #sidebar { min-width: 250px; max-width: 250px; background-color: #0f172a; min-height: 100vh; position: fixed; z-index: 1000; transition: all 0.3s;}
+        #sidebar.collapsed { min-width: 80px; max-width: 80px; }
+        #sidebar .sidebar-header { padding: 20px; color: white; border-bottom: 1px solid #1e293b; height: 70px; display: flex; align-items: center; justify-content: center;}
+        #sidebar.collapsed .logo-text { display: none; }
+        #sidebar ul.components { padding: 20px 0; margin: 0;}
+        #sidebar ul li a { padding: 15px 20px; display: block; color: #94a3b8; text-decoration: none; display: flex; align-items: center; transition: 0.2s;}
+        #sidebar ul li a:hover, #sidebar ul li.active > a { color: #fff; background: #1e293b; border-left: 4px solid #3b82f6; }
+        #sidebar ul li a i { margin-right: 15px; font-size: 1.2rem; width: 20px; text-align: center; }
+        #sidebar.collapsed ul li a span { display: none; }
+        #content { width: calc(100% - 250px); margin-left: 250px; transition: all 0.3s; min-height: 100vh; }
+        #sidebar.collapsed + #content { width: calc(100% - 80px); margin-left: 80px; }
+        .top-header { background: #fff; height: 70px; padding: 0 30px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 999; }
+        .btn-toggle { background: transparent; border: none; font-size: 1.3rem; color: #64748b; cursor: pointer;}
+        
+        /* CSS RIÊNG TRANG PROFILE */
+        .profile-card { background: #fff; border-radius: 16px; border: 1px solid #e2e8f0; padding: 30px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+        .avatar-wrapper { position: relative; width: 150px; height: 150px; margin: 0 auto; }
+        .avatar-img { width: 150px; height: 150px; border-radius: 50%; object-fit: cover; border: 4px solid #fff; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .btn-upload { position: absolute; bottom: 5px; right: 5px; background: #3b82f6; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 3px solid #fff; transition: 0.2s;}
+        .btn-upload:hover { background: #2563eb; transform: scale(1.1); }
+        .form-control { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 15px; }
+        .form-control:focus { border-color: #3b82f6; box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25); }
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR CHUẨN -->
+    <nav id="sidebar">
+        <div class="sidebar-header"><h3 class="logo-text fw-bold m-0"><i class="fas fa-solar-panel text-primary"></i> ASPC</h3></div>
+        <ul class="list-unstyled components">
+            <li><a href="index.html"><i class="fas fa-th-large"></i> <span>Tổng Quan</span></a></li>
+            <li><a href="weather.html"><i class="fas fa-cloud-sun-rain"></i> <span>Dự Báo Thời Tiết</span></a></li>
+            <li><a href="health.html"><i class="fas fa-heartbeat"></i> <span>Sức Khỏe Pin</span></a></li>
+            <li><a href="hotspot.html"><i class="fas fa-fire"></i> <span>Điểm Nóng AI</span></a></li>
+            <li><a href="history.html"><i class="fas fa-history"></i> <span>Lịch Sử Lệnh</span></a></li>
+            <li><a href="parameter.html"><i class="fas fa-cog"></i> <span>Cấu Hình</span></a></li>
+        </ul>
+    </nav>
+
+    <div id="content">
+        <div class="top-header">
+            <div class="d-flex align-items-center">
+                <button type="button" id="sidebarCollapse" class="btn-toggle"><i class="fas fa-bars"></i></button>
+                <span class="ms-3 fw-bold text-secondary" style="font-size: 1.1rem;">Hồ Sơ Của Tôi</span>
+            </div>
+            
+            <div class="d-flex align-items-center">
+                <div class="dropdown">
+                    <a href="#" class="d-flex align-items-center text-decoration-none" id="dropdownUser" data-bs-toggle="dropdown">
+                        <img id="nav-avatar" src="https://ui-avatars.com/api/?name={{ session.get('username', 'U') }}&background=3b82f6&color=fff" width="40" height="40" class="rounded-circle shadow-sm">
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 mt-2">
+                        <li class="px-4 py-3 border-bottom text-center bg-light">
+                            <h6 class="fw-bold mb-0 text-dark">{{ session.get('username', 'Người dùng') }}</h6>
+                        </li>
+                        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="profile.html"><i class="fas fa-id-card me-2 text-primary"></i> Quản lý hồ sơ</a></li>
+                        <li><hr class="dropdown-divider my-2"></li>
+                        <li class="mb-1"><a class="dropdown-item py-2 fw-bold text-danger" href="/logout"><i class="fas fa-sign-out-alt me-2"></i> Đăng xuất</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="container-fluid p-4">
+            <div class="row g-4">
+                
+                <!-- CỘT TRÁI: AVATAR & THÔNG TIN CHUNG -->
+                <div class="col-lg-4">
+                    <div class="profile-card text-center h-100">
+                        <div class="avatar-wrapper mb-4">
+                            <img id="main-avatar" src="https://ui-avatars.com/api/?name={{ session.get('username', 'U') }}&background=3b82f6&color=fff" class="avatar-img" alt="Avatar">
+                            
+                            <!-- Input File Ẩn -->
+                            <input type="file" id="avatar-input" accept="image/*" style="display: none;">
+                            
+                            <!-- Nút bấm upload -->
+                            <label for="avatar-input" class="btn-upload" title="Đổi ảnh đại diện">
+                                <i class="fas fa-camera"></i>
+                            </label>
+                        </div>
+                        <h4 class="fw-bold text-dark" id="display-name">Đang tải...</h4>
+                        <p class="text-muted" id="display-email">@email.com</p>
+                        <span class="badge bg-success-subtle text-success px-3 py-2 rounded-pill"><i class="fas fa-check-circle me-1"></i> Tài khoản Kích Hoạt</span>
+                    </div>
+                </div>
+
+                <!-- CỘT PHẢI: FORM CẬP NHẬT -->
+                <div class="col-lg-8">
+                    <div class="profile-card h-100">
+                        <ul class="nav nav-tabs nav-fill mb-4 border-bottom-0 gap-2" id="profileTabs" role="tablist">
+                            <li class="nav-item">
+                                <button class="nav-link active fw-bold border-0 bg-light rounded-3 w-100" data-bs-toggle="tab" data-bs-target="#info-tab">Cập nhật thông tin</button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link fw-bold border-0 bg-light rounded-3 w-100" data-bs-toggle="tab" data-bs-target="#security-tab">Bảo mật & Mật khẩu</button>
+                            </li>
+                        </ul>
+
+                        <div class="tab-content">
+                            <!-- TAB THÔNG TIN -->
+                            <div class="tab-pane fade show active" id="info-tab">
+                                <div id="info-alert"></div>
+                                <form id="form-info">
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-semibold text-secondary small">Họ và Tên</label>
+                                            <input type="text" class="form-control" id="inp-fullname" placeholder="Vd: Nguyễn Văn A">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label class="form-label fw-semibold text-secondary small">Số Điện Thoại</label>
+                                            <input type="text" class="form-control" id="inp-phone" placeholder="Vd: 0987654321">
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="form-label fw-semibold text-secondary small">Địa chỉ liên hệ</label>
+                                            <textarea class="form-control" id="inp-address" rows="3" placeholder="Nhập địa chỉ của bạn..."></textarea>
+                                        </div>
+                                        <div class="col-12 text-end mt-4">
+                                            <button type="submit" class="btn btn-primary px-4 fw-bold"><i class="fas fa-save me-2"></i> Lưu Thay Đổi</button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <!-- TAB BẢO MẬT -->
+                            <div class="tab-pane fade" id="security-tab">
+                                <div class="alert alert-warning border-0 bg-warning-subtle text-warning-emphasis fw-medium mb-4">
+                                    <i class="fas fa-shield-alt me-2"></i> LƯU Ý: Vì lý do bảo mật, bạn chỉ có thể thay đổi mật khẩu <b>1 lần sau mỗi 30 ngày</b>.
+                                </div>
+                                
+                                <p class="text-muted small mb-4">Lần đổi mật khẩu gần nhất: <strong id="lbl-last-change" class="text-dark">Đang tải...</strong></p>
+
+                                <div id="security-alert"></div>
+
+                                <form id="form-security">
+                                    <div class="mb-3">
+                                        <label class="form-label fw-semibold text-secondary small">Mật khẩu hiện tại</label>
+                                        <input type="password" class="form-control" id="inp-old-pass" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label fw-semibold text-secondary small">Mật khẩu mới</label>
+                                        <input type="password" class="form-control" id="inp-new-pass" required minlength="6">
+                                    </div>
+                                    <div class="text-end mt-4">
+                                        <button type="submit" class="btn btn-danger px-4 fw-bold" id="btn-change-pass"><i class="fas fa-key me-2"></i> Đổi Mật Khẩu</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPT XỬ LÝ API -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('sidebarCollapse').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('collapsed'));
+
+        // 1. TẢI DỮ LIỆU KHI MỞ TRANG
+        async function loadProfile() {
+            try {
+                const res = await fetch('/api/profile/get');
+                const data = await res.json();
+
+                document.getElementById('display-email').innerText = data.username;
+                document.getElementById('display-name').innerText = data.full_name || 'Người Dùng ASPC';
+                
+                document.getElementById('inp-fullname').value = data.full_name;
+                document.getElementById('inp-phone').value = data.phone;
+                document.getElementById('inp-address').value = data.address;
+                document.getElementById('lbl-last-change').innerText = data.last_password_change;
+
+                // Nếu có avatar riêng thì thay đổi
+                if(data.avatar) {
+                    const avatarUrl = `/static/uploads/${data.avatar}`;
+                    document.getElementById('main-avatar').src = avatarUrl;
+                    document.getElementById('nav-avatar').src = avatarUrl;
+                }
+            } catch (err) { console.error('Lỗi tải profile'); }
+        }
+        loadProfile();
+
+        // 2. XỬ LÝ UPLOAD AVATAR
+        document.getElementById('avatar-input').addEventListener('change', async function(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+
+            const formData = new FormData();
+            formData.append('avatar', file);
+
+            // Hiển thị tạm ảnh đang load
+            document.getElementById('main-avatar').style.opacity = '0.5';
+
+            try {
+                const res = await fetch('/api/profile/upload_avatar', { method: 'POST', body: formData });
+                const result = await res.json();
+                if(result.status === 'success') {
+                    document.getElementById('main-avatar').src = result.avatar_url;
+                    document.getElementById('nav-avatar').src = result.avatar_url;
+                } else {
+                    alert(result.message);
+                }
+            } catch(e) { alert('Lỗi tải ảnh lên!'); }
+            
+            document.getElementById('main-avatar').style.opacity = '1';
+        });
+
+        // 3. XỬ LÝ CẬP NHẬT THÔNG TIN
+        document.getElementById('form-info').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btn = this.querySelector('button'); btn.disabled = true;
+
+            const payload = {
+                full_name: document.getElementById('inp-fullname').value,
+                phone: document.getElementById('inp-phone').value,
+                address: document.getElementById('inp-address').value
+            };
+
+            const res = await fetch('/api/profile/update_info', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json();
+            
+            const alertBox = document.getElementById('info-alert');
+            alertBox.innerHTML = `<div class="alert alert-success py-2 small">${result.message}</div>`;
+            setTimeout(() => alertBox.innerHTML = '', 3000);
+            
+            loadProfile(); // Refresh
+            btn.disabled = false;
+        });
+
+        // 4. XỬ LÝ ĐỔI MẬT KHẨU (Logic 30 ngày)
+        document.getElementById('form-security').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-change-pass'); btn.disabled = true;
+
+            const payload = {
+                old_password: document.getElementById('inp-old-pass').value,
+                new_password: document.getElementById('inp-new-pass').value
+            };
+
+            const res = await fetch('/api/profile/change_password', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json();
+            
+            const alertBox = document.getElementById('security-alert');
+            if(result.status === 'success') {
+                alertBox.innerHTML = `<div class="alert alert-success py-2 small">${result.message}</div>`;
+                this.reset();
+                loadProfile();
+            } else {
+                alertBox.innerHTML = `<div class="alert alert-danger py-2 small"><i class="fas fa-times-circle me-1"></i> ${result.message}</div>`;
+            }
+            
+            setTimeout(() => alertBox.innerHTML = '', 5000);
+            btn.disabled = false;
+        });
+    </script>
+</body>
+</html>

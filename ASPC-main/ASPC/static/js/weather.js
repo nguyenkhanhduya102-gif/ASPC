@@ -1,51 +1,18 @@
 function setText(id, text) {
   const el = document.getElementById(id);
-  if (el) el.innerText = text;
+  if (el) el.innerHTML = text; 
 }
 
-function showError(message) {
-  const box = document.getElementById('weather-error');
-  if (!box) return;
-  box.style.display = 'block';
-  box.innerText = message;
-}
-
-function hideError() {
-  const box = document.getElementById('weather-error');
-  if (!box) return;
-  box.style.display = 'none';
-  box.innerText = '';
-}
-
-function renderRows(forecast) {
-  const tbody = document.getElementById('weather-rows');
-  if (!tbody) return;
-
-  if (!Array.isArray(forecast) || forecast.length === 0) {
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="6" class="text-muted">Không có dữ liệu dự báo.</td>
-      </tr>
-    `;
-    return;
-  }
-
-  tbody.innerHTML = forecast.map(item => `
-    <tr>
-      <td>${item.time ?? '--'}</td>
-      <td class="fw-bold">${(item.temp ?? '--')}</td>
-      <td>${item.humidity ?? '--'}</td>
-      <td>${item.clouds ?? '--'}</td>
-      <td>${item.wind_speed ?? '--'}</td>
-      <td>${item.weather ?? '--'}</td>
-    </tr>
-  `).join('');
+// Hàm format giờ từ chuỗi API (VD: "2024-05-20 15:00:00" -> "15:00, 20/05")
+function formatTime(dt_txt) {
+    if(!dt_txt) return '--';
+    const parts = dt_txt.split(' ');
+    const time = parts[1].substring(0, 5); // Lấy HH:MM
+    const dateParts = parts[0].split('-');
+    return `<span class="text-primary fw-bold">${time}</span><br><small class="text-muted">${dateParts[2]}/${dateParts[1]}</small>`;
 }
 
 async function loadWeather() {
-  hideError();
-  setText('weather-updated', 'Đang tải...');
-
   try {
     const resp = await fetch('/api/weather', { cache: 'no-store' });
     const payload = await resp.json().catch(() => ({}));
@@ -57,29 +24,88 @@ async function loadWeather() {
     const data = payload.data || {};
     const forecast = data.forecast || [];
 
-    setText('weather-location', data.location || '--');
-
+    // Lấy mốc thời tiết gần nhất
     const first = forecast[0] || {};
-    setText('weather-temp', (first.temp !== undefined && first.temp !== null) ? `${first.temp} °C` : '--');
-    setText('weather-humidity', (first.humidity !== undefined && first.humidity !== null) ? `${first.humidity} %` : '--');
-    setText('weather-clouds', (first.clouds !== undefined && first.clouds !== null) ? `${first.clouds} %` : '--');
-    setText('weather-wind', (first.wind_speed !== undefined && first.wind_speed !== null) ? `${first.wind_speed} m/s` : '--');
-    setText('weather-desc', first.weather || '--');
+    
+    // Tìm Min/Max
+    let minT = 999, maxT = -999;
+    forecast.forEach(item => {
+      if(item.temp < minT) minT = item.temp;
+      if(item.temp > maxT) maxT = item.temp;
+    });
+    if(minT === 999) minT = '--';
+    if(maxT === -999) maxT = '--';
 
-    renderRows(forecast);
+    // Cập nhật CỤM BÊN TRÁI
+    setText('w-city', `<i class="fas fa-map-marker-alt me-2"></i> ${data.location || 'Trạm Quan Trắc'}`);
+    setText('w-desc', (first.weather || 'Không xác định').toUpperCase());
+    setText('w-temp', (first.temp !== undefined) ? `${Math.round(first.temp)}°` : '--°');
+    setText('w-min', minT !== '--' ? Math.round(minT) : '--');
+    setText('w-max', maxT !== '--' ? Math.round(maxT) : '--');
 
-    const now = new Date();
-    setText('weather-updated', `Cập nhật: ${now.toLocaleString('vi-VN')}`);
+    // Cập nhật 4 THẺ BÊN PHẢI
+    setText('w-humidity', (first.humidity !== undefined) ? `${first.humidity} %` : '-- %');
+    setText('w-wind', (first.wind_speed !== undefined) ? `${first.wind_speed} m/s` : '-- m/s');
+    setText('w-clouds', (first.clouds !== undefined) ? `${first.clouds} %` : '-- %');
+    
+    const pop = (first.pop !== undefined) ? Math.round(first.pop) : 0;
+    setText('w-pressure', `${pop} %`); 
+
+    // --- VẼ BẢNG DỰ BÁO CÁC GIỜ TỚI ---
+    const tbody = document.getElementById('weather-rows');
+    if (tbody) {
+        if (forecast.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-muted">Không có dữ liệu dự báo.</td></tr>`;
+        } else {
+            let html = '';
+            // Bỏ qua mốc đầu tiên (vì đang hiển thị ở thẻ to rồi), lặp từ mốc thứ 1 trở đi (tối đa lấy 5 mốc)
+            for(let i = 1; i < Math.min(forecast.length, 6); i++) {
+                const item = forecast[i];
+                
+                // Xác định Icon Thời tiết cơ bản dựa vào description
+                let icon = '<i class="fas fa-cloud text-secondary fs-4"></i>';
+                let descLower = (item.weather || '').toLowerCase();
+                let statusBadge = '<span class="badge bg-success-subtle text-success">Làm mát bình thường</span>';
+                
+                if(descLower.includes('rain') || descLower.includes('mưa')) {
+                    icon = '<i class="fas fa-cloud-showers-heavy text-primary fs-4"></i>';
+                    statusBadge = '<span class="badge bg-warning-subtle text-warning">Tạm dừng bơm (Có mưa)</span>';
+                } else if(descLower.includes('sun') || descLower.includes('clear')) {
+                    icon = '<i class="fas fa-sun text-warning fs-4"></i>';
+                }
+
+                html += `
+                <tr class="border-bottom">
+                    <td class="text-start ps-4">${formatTime(item.time)}</td>
+                    <td>
+                        <div class="d-flex flex-column align-items-center justify-content-center">
+                            ${icon}
+                            <span class="small text-muted text-capitalize mt-1">${item.weather}</span>
+                        </div>
+                    </td>
+                    <td><h5 class="m-0 fw-bold">${Math.round(item.temp)}°C</h5></td>
+                    <td class="text-info fw-bold">${item.humidity}% <i class="fas fa-tint fs-6 ms-1"></i></td>
+                    <td>
+                        <span class="d-block text-secondary small"><i class="fas fa-cloud me-1"></i> ${item.clouds}%</span>
+                        <span class="d-block text-secondary small"><i class="fas fa-wind me-1"></i> ${item.wind_speed} m/s</span>
+                    </td>
+                    <td class="pe-4">${statusBadge}</td>
+                </tr>
+                `;
+            }
+            tbody.innerHTML = html;
+        }
+    }
+
   } catch (err) {
-    showError(err?.message || 'Có lỗi khi tải dữ liệu thời tiết.');
-    setText('weather-updated', 'Lỗi tải dữ liệu');
-    renderRows([]);
+    console.error("Weather load error:", err);
+    setText('w-city', '<i class="fas fa-exclamation-triangle me-2 text-warning"></i> Lỗi API');
+    setText('w-desc', 'Vui lòng kiểm tra lại Key OpenWeather');
   }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const btn = document.getElementById('weather-refresh');
-  if (btn) btn.addEventListener('click', loadWeather);
   loadWeather();
+  setInterval(loadWeather, 10 * 60 * 1000);
 });
 

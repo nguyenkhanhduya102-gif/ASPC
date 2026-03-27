@@ -63,13 +63,18 @@
             </div>
             <div class="d-flex align-items-center">
                 <select id="station-selector" class="form-select station-select me-3" onchange="changeStation(this.value)">
-                    <option value="ESP32_DEFAULT">📍 Trạm Sài Gòn</option>
+                    <option value="ESP32_DEFAULT">📍 Trạm Hà Nội</option>
                 </select>
                 <!-- DROPDOWN PROFILE NGƯỜI DÙNG -->
 <div class="dropdown ms-3">
     <a href="#" class="d-flex align-items-center text-decoration-none" id="dropdownUser" data-bs-toggle="dropdown" aria-expanded="false">
-        <!-- Tự động lấy tên User từ Session để tạo Avatar -->
-        <img src="https://ui-avatars.com/api/?name={{ session.get('username', 'U') }}&background=3b82f6&color=fff&bold=true" alt="Avatar" width="40" height="40" class="rounded-circle shadow-sm border border-2 border-white">
+        {% if avatar %}
+            <!-- Nếu có ảnh thật thì load ảnh thật -->
+            <img src="/static/uploads/{{ avatar }}" alt="Avatar" width="40" height="40" class="rounded-circle shadow-sm border border-2 border-white" style="object-fit: cover;">
+        {% else %}
+            <!-- Nếu chưa có ảnh thì dùng ảnh chữ cái mặc định -->
+            <img src="https://ui-avatars.com/api/?name={{ session.get('username', 'U') }}&background=3b82f6&color=fff&bold=true" alt="Avatar" width="40" height="40" class="rounded-circle shadow-sm border border-2 border-white">
+        {% endif %}
     </a>
     
     <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 mt-2" aria-labelledby="dropdownUser" style="min-width: 250px; border-radius: 12px;">
@@ -81,9 +86,9 @@
         </li>
         
         <!-- Các nút chức năng -->
-        <li class="mt-2"><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-id-card me-2 text-primary"></i> Quản lý hồ sơ</a></li>
-        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-camera me-2 text-info"></i> Đổi ảnh đại diện</a></li>
-        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-cog me-2 text-secondary"></i> Cài đặt bảo mật</a></li>
+        <li class="mt-2"><a class="dropdown-item py-2 fw-medium text-secondary" href="profile.html"><i class="fas fa-id-card me-2 text-primary"></i> Quản lý hồ sơ</a></li>
+        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="profile.html"><i class="fas fa-camera me-2 text-info"></i> Đổi ảnh đại diện</a></li>
+        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="profile.html"><i class="fas fa-cog me-2 text-secondary"></i> Cài đặt bảo mật</a></li>
         
         <li><hr class="dropdown-divider my-2"></li>
         
@@ -135,6 +140,49 @@
                         <div class="progress" style="height: 8px;">
                             <div id="ai-dust-bar" class="progress-bar bg-secondary" role="progressbar" style="width: 0%;"></div>
                         </div>
+
+                        <!-- BẮT ĐẦU CHÈN THÊM TỪ ĐÂY: KHỐI CẢNH BÁO VẬT LÝ -->
+                        <hr class="my-4 border-secondary-subtle">
+                        <h6 class="fw-bold text-secondary mb-3"><i class="fas fa-microchip me-2"></i> Giám Sát Phần Cứng (Sensors)</h6>
+                        
+                        <div class="row g-2">
+                            <!-- Quá dòng -->
+                            <div class="col-6">
+                                <div id="alert-insulation" class="p-2 border rounded-3 text-center" style="background-color: #ecfdf5; border-color: #10b981 !important;">
+                                    <i class="fas fa-bolt fs-4 mb-1 text-success" id="icon-insulation"></i>
+                                    <div class="small fw-bold" style="font-size: 0.75rem;">Dòng Điện</div>
+                                    <div class="small text-muted" style="font-size: 0.7rem;" id="text-insulation">Ổn định</div>
+                                </div>
+                            </div>
+                            <!-- Sụt áp -->
+                            <div class="col-6">
+                                <div id="alert-voltage_drop" class="p-2 border rounded-3 text-center" style="background-color: #ecfdf5; border-color: #10b981 !important;">
+                                    <i class="fas fa-car-battery fs-4 mb-1 text-success" id="icon-voltage_drop"></i>
+                                    <div class="small fw-bold" style="font-size: 0.75rem;">Điện Áp</div>
+                                    <div class="small text-muted" style="font-size: 0.7rem;" id="text-voltage_drop">Ổn định</div>
+                                </div>
+                            </div>
+                            <!-- Chập nước -->
+                            <div class="col-6">
+                                <div id="alert-hardware_failure" class="p-2 border rounded-3 text-center" style="background-color: #ecfdf5; border-color: #10b981 !important;">
+                                    <i class="fas fa-water fs-4 mb-1 text-success" id="icon-hardware_failure"></i>
+                                    <div class="small fw-bold" style="font-size: 0.75rem;">Cách Điện</div>
+                                    <div class="small text-muted" style="font-size: 0.7rem;" id="text-hardware_failure">Khô ráo</div>
+                                </div>
+                            </div>
+                            <!-- Lỗi cảm biến -->
+                            <div class="col-6">
+                                <div id="alert-sensor_malfunction" class="p-2 border rounded-3 text-center" style="background-color: #ecfdf5; border-color: #10b981 !important;">
+                                    <i class="fas fa-satellite-dish fs-4 mb-1 text-success" id="icon-sensor_malfunction"></i>
+                                    <div class="small fw-bold" style="font-size: 0.75rem;">Cảm Biến</div>
+                                    <div class="small text-muted" style="font-size: 0.7rem;" id="text-sensor_malfunction">Bình thường</div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- KẾT THÚC KHỐI CẢNH BÁO VẬT LÝ -->
+
+
+
                     </div>
                 </div>
             </div>
@@ -148,6 +196,7 @@
             if(s) s.value = localStorage.getItem('device_id') || 'ESP32_DEFAULT'; 
         });
         function changeStation(mac) { localStorage.setItem('device_id', mac); window.location.reload(); }
+
 
         // Bắt Socket để nhảy cảnh báo nếu có Hotspot
         const socket = io();
@@ -175,6 +224,54 @@
                 `;
             }
         });
+        //CHÈN THÊM: Lắng nghe cảnh báo hệ thống từ Backend (như quá dòng, sụt áp, chập nước...)
+        socket.on('system_alert', (alert) => {
+            // alert có dạng: {level: 'CRITICAL', message: '...', type: 'insulation'}
+            if(alert.type) {
+                const boxId = 'alert-' + alert.type;
+                const iconId = 'icon-' + alert.type;
+                const textId = 'text-' + alert.type;
+                
+                const boxEl = document.getElementById(boxId);
+                const iconEl = document.getElementById(iconId);
+                const textEl = document.getElementById(textId);
+                
+                if(boxEl) {
+                    // Chuyển sang màu ĐỎ BÁO ĐỘNG
+                    boxEl.style.backgroundColor = '#fef2f2';
+                    boxEl.style.borderColor = '#ef4444 !important';
+                    
+                    iconEl.classList.remove('text-success');
+                    iconEl.classList.add('text-danger');
+                    // Thêm hiệu ứng chớp nháy
+                    iconEl.style.animation = 'blink 1s infinite';
+                    
+                    textEl.innerText = "CẢNH BÁO LỖI!";
+                    textEl.classList.remove('text-muted');
+                    textEl.classList.add('text-danger', 'fw-bold');
+
+                    // Tùy chọn: Tự động reset về màu xanh sau 10 giây nếu hết lỗi
+                    setTimeout(() => {
+                        boxEl.style.backgroundColor = '#ecfdf5';
+                        boxEl.style.borderColor = '#10b981 !important';
+                        iconEl.classList.remove('text-danger');
+                        iconEl.classList.add('text-success');
+                        iconEl.style.animation = 'none';
+                        
+                        textEl.classList.remove('text-danger', 'fw-bold');
+                        textEl.classList.add('text-muted');
+                        
+                        if(alert.type === 'insulation') textEl.innerText = "Ổn định";
+                        if(alert.type === 'voltage_drop') textEl.innerText = "Ổn định";
+                        if(alert.type === 'hardware_failure') textEl.innerText = "Khô ráo";
+                        if(alert.type === 'sensor_malfunction') textEl.innerText = "Bình thường";
+                    }, 10000);
+                }
+            }
+        });
+        // KẾT THÚC CHÈN THÊM
+
+
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>

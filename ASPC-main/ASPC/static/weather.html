@@ -58,13 +58,18 @@
             </div>
             <div class="d-flex align-items-center">
                 <select id="station-selector" class="form-select station-select me-3" onchange="changeStation(this.value)">
-                    <option value="ESP32_DEFAULT">📍 Trạm Sài Gòn</option>
+                    <option value="ESP32_DEFAULT">📍 Trạm Hà Nội</option>
                 </select>
                 <!-- DROPDOWN PROFILE NGƯỜI DÙNG -->
 <div class="dropdown ms-3">
     <a href="#" class="d-flex align-items-center text-decoration-none" id="dropdownUser" data-bs-toggle="dropdown" aria-expanded="false">
-        <!-- Tự động lấy tên User từ Session để tạo Avatar -->
-        <img src="https://ui-avatars.com/api/?name={{ session.get('username', 'U') }}&background=3b82f6&color=fff&bold=true" alt="Avatar" width="40" height="40" class="rounded-circle shadow-sm border border-2 border-white">
+        {% if avatar %}
+            <!-- Nếu có ảnh thật thì load ảnh thật -->
+            <img src="/static/uploads/{{ avatar }}" alt="Avatar" width="40" height="40" class="rounded-circle shadow-sm border border-2 border-white" style="object-fit: cover;">
+        {% else %}
+            <!-- Nếu chưa có ảnh thì dùng ảnh chữ cái mặc định -->
+            <img src="https://ui-avatars.com/api/?name={{ session.get('username', 'U') }}&background=3b82f6&color=fff&bold=true" alt="Avatar" width="40" height="40" class="rounded-circle shadow-sm border border-2 border-white">
+        {% endif %}
     </a>
     
     <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 mt-2" aria-labelledby="dropdownUser" style="min-width: 250px; border-radius: 12px;">
@@ -76,9 +81,9 @@
         </li>
         
         <!-- Các nút chức năng -->
-        <li class="mt-2"><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-id-card me-2 text-primary"></i> Quản lý hồ sơ</a></li>
-        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-camera me-2 text-info"></i> Đổi ảnh đại diện</a></li>
-        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-cog me-2 text-secondary"></i> Cài đặt bảo mật</a></li>
+        <li class="mt-2"><a class="dropdown-item py-2 fw-medium text-secondary" href="profile.html"><i class="fas fa-id-card me-2 text-primary"></i> Quản lý hồ sơ</a></li>
+        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="profile.html"><i class="fas fa-camera me-2 text-info"></i> Đổi ảnh đại diện</a></li>
+        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="profile.html"><i class="fas fa-cog me-2 text-secondary"></i> Cài đặt bảo mật</a></li>
         
         <li><hr class="dropdown-divider my-2"></li>
         
@@ -89,57 +94,85 @@
             </div>
         </div>
 
+
+
+
+                <!-- MAIN DASHBOARD -->
         <div class="container-fluid p-4">
-            <div class="row g-4 justify-content-center">
+            
+            <!-- KHỐI 1: TỔNG QUAN THỜI TIẾT HIỆN TẠI -->
+            <div class="row g-4 mb-4">
                 
-                <!-- Bảng Thời tiết chính -->
-                <div class="col-lg-5">
-                    <div class="weather-hero h-100 d-flex flex-column justify-content-center">
+                <!-- Bảng Thời tiết chính (Cột trái) -->
+                <div class="col-lg-5 col-md-12 d-flex">
+                    <div class="weather-hero w-100 d-flex flex-column justify-content-center">
                         <h4 class="fw-bold mb-0" id="w-city"><i class="fas fa-map-marker-alt me-2"></i>Đang Tải...</h4>
-                        <p class="text-white-50 mb-0" id="w-desc">Dữ liệu từ OpenWeather</p>
+                        <p class="text-white-50 mb-0 fw-bold" id="w-desc" style="letter-spacing: 2px;">--</p>
                         
                         <div class="main-temp" id="w-temp">--°</div>
                         
-                        <div class="d-flex justify-content-center gap-4 fw-semibold">
-                            <span><i class="fas fa-temperature-arrow-down text-info me-1"></i> Min: <span id="w-min">--</span>°</span>
-                            <span><i class="fas fa-temperature-arrow-up text-warning me-1"></i> Max: <span id="w-max">--</span>°</span>
+                        <div class="d-flex justify-content-center gap-4 fw-semibold mt-2">
+                            <span class="badge bg-white text-info px-3 py-2 rounded-pill"><i class="fas fa-temperature-arrow-down me-1"></i> Min: <span id="w-min">--</span>°</span>
+                            <span class="badge bg-white text-warning px-3 py-2 rounded-pill"><i class="fas fa-temperature-arrow-up me-1"></i> Max: <span id="w-max">--</span>°</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Các thông số chi tiết -->
-                <div class="col-lg-7">
-                    <div class="row g-3 h-100">
-                        <div class="col-md-6">
-                            <div class="w-card">
-                                <div class="w-icon text-info"><i class="fas fa-tint"></i></div>
+                <!-- Các thông số chi tiết (Cột phải) -->
+                <div class="col-lg-7 col-md-12 d-flex">
+                    <div class="row g-3 w-100 m-0">
+                        <div class="col-md-6 col-sm-6 p-1">
+                            <div class="w-card h-100">
+                                <div class="w-icon text-info" style="background: #e0f2fe;"><i class="fas fa-tint"></i></div>
                                 <div><small class="text-muted fw-bold text-uppercase">Độ Ẩm Không Khí</small><h4 class="m-0 fw-bold text-dark" id="w-humidity">-- %</h4></div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="w-card">
-                                <div class="w-icon text-secondary"><i class="fas fa-wind"></i></div>
+                        <div class="col-md-6 col-sm-6 p-1">
+                            <div class="w-card h-100">
+                                <div class="w-icon text-secondary" style="background: #f1f5f9;"><i class="fas fa-wind"></i></div>
                                 <div><small class="text-muted fw-bold text-uppercase">Tốc Độ Gió</small><h4 class="m-0 fw-bold text-dark" id="w-wind">-- m/s</h4></div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="w-card">
-                                <div class="w-icon text-primary"><i class="fas fa-cloud"></i></div>
+                        <div class="col-md-6 col-sm-6 p-1">
+                            <div class="w-card h-100">
+                                <div class="w-icon text-primary" style="background: #dbeafe;"><i class="fas fa-cloud"></i></div>
                                 <div><small class="text-muted fw-bold text-uppercase">Độ Phủ Mây</small><h4 class="m-0 fw-bold text-dark" id="w-clouds">-- %</h4></div>
                             </div>
                         </div>
-                        <div class="col-md-6">
-                            <div class="w-card">
-                                <div class="w-icon text-danger"><i class="fas fa-compress-arrows-alt"></i></div>
-                                <div><small class="text-muted fw-bold text-uppercase">Áp Suất (hPa)</small><h4 class="m-0 fw-bold text-dark" id="w-pressure">-- hPa</h4></div>
+                        <div class="col-md-6 col-sm-6 p-1">
+                            <div class="w-card h-100">
+                                <div class="w-icon text-warning" style="background: #fef3c7;"><i class="fas fa-umbrella"></i></div>
+                                <div><small class="text-muted fw-bold text-uppercase">Khả Năng Mưa (POP)</small><h4 class="m-0 fw-bold text-dark" id="w-pressure">-- %</h4></div>
                             </div>
                         </div>
                     </div>
                 </div>
-
             </div>
-        </div>
-    </div>
+
+            <!-- KHỐI 2: DỰ BÁO CÁC GIỜ TỚI LẤP ĐẦY KHOẢNG TRỐNG -->
+            <h5 class="fw-bold mb-3"><i class="fas fa-calendar-day text-primary me-2"></i> Dự Báo Các Khung Giờ Tới (AI Optimizer)</h5>
+            <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                <div class="table-responsive">
+                    <table class="table table-hover table-borderless text-center align-middle mb-0">
+                        <thead class="bg-light text-secondary" style="font-size: 0.85rem;">
+                            <tr>
+                                <th class="py-3 text-start ps-4">THỜI GIAN</th>
+                                <th class="py-3">THỜI TIẾT</th>
+                                <th class="py-3">NHIỆT ĐỘ</th>
+                                <th class="py-3">ĐỘ ẨM</th>
+                                <th class="py-3">MÂY & GIÓ</th>
+                                <th class="py-3 pe-4">TRẠNG THÁI</th>
+                            </tr>
+                        </thead>
+                        <tbody id="weather-rows" class="fw-medium">
+                            <!-- Dữ liệu sẽ được JS điền vào đây -->
+                            <tr><td colspan="6" class="py-4 text-muted"><i class="fas fa-spinner fa-spin me-2"></i> Đang tải dữ liệu dự báo...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div> <!-- End Container -->
 
     <script>
         document.getElementById('sidebarCollapse').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('collapsed'));

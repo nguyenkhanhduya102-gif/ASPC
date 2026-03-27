@@ -141,24 +141,44 @@ function updateChartData(currentTemp) {
 // --- 2. XỬ LÝ SOCKET (GIỮ NGUYÊN LOGIC CŨ) ---
 
 socket.on('sensor_data', (data) => {
+    // 1. Cập nhật các ô thông số nhỏ
     updateText('current-temp', data.temp_env + ' °C');
     updateText('humidity', data.humidity + ' %');
     updateText('light-intensity', data.lux + ' Lux');
-    updateText('solar-temp', data.temp_panel+ ' °C');
-    if(data.health_score !== undefined) updateText('efficiency', data.health_score + '%');
-    updatePumpStatusUI(data.pump_status, 'cool');
-    // Chỉ cập nhật trạng thái bơm nếu KHÔNG CÓ lệnh điều khiển nào trong 3 giây qua
-// Đồng bộ hiển thị bụi từ hotspot pipeline mới
+    updateText('solar-temp', data.temp_panel + ' °C');
+    
+    if(data.health_score !== undefined) {
+        updateText('efficiency', Math.round(data.health_score) + '%');
+    }
+    
+    // Đồng bộ hiển thị bụi từ hotspot pipeline
     const dustEl = document.getElementById('dust-level');
     if (dustEl) {
         const dust = (typeof data.dust_level === 'number') ? data.dust_level : 0;
-        dustEl.textContent = `${dust.toFixed(1)}`;
+        dustEl.textContent = `${dust.toFixed(1)} %`; // Thêm chữ % cho đẹp
     }
 
+    // Cập nhật trạng thái nút bơm
     updatePumpStatusUI(data.pump_status, 'cool');
-    // GỌI HÀM VẼ BIỂU ĐỒ
+    
+    // GỌI HÀM VẼ BIỂU ĐỒ NÂNG CAO (của bạn)
     updateChartData(data.temp_panel);
 });
+
+// THÊM SỰ KIỆN NÀY ĐỂ BẮT DỮ LIỆU KINH TẾ TỪ HÀM GIẢ LẬP
+socket.on('efficiency_data', (data) => {
+    const profitEl = document.getElementById('eco-profit');
+    const energyEl = document.getElementById('eco-energy');
+    
+    if(profitEl && data.y_today_vnd !== undefined) {
+        profitEl.innerText = new Intl.NumberFormat('vi-VN').format(Math.round(data.y_today_vnd)) + " đ";
+    }
+    
+    if(energyEl && data.x_today_kwh !== undefined) {
+        energyEl.innerText = data.x_today_kwh.toFixed(3) + " kWh";
+    }
+});
+
 
 socket.on('ai_data', (data) => {
     if (data.ai && data.ai.pred_temp_5min) {

@@ -1,3 +1,4 @@
+# ASPC - PROJECT
 import json
 import sqlite3
 import datetime
@@ -10,9 +11,14 @@ import sys
 import time
 from dotenv import load_dotenv
 import requests
-from flask import session, redirect, url_for, flash
+from flask import session, redirect, url_for, flash , Response
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
+from datetime import datetime, timedelta
+from werkzeug.utils import secure_filename
+import cv2
+import numpy as np
+
 # Load biến môi trường từ file .env (cố định theo thư mục file này)
 try:
     _dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
@@ -41,7 +47,13 @@ from hotspot_engine import HotspotDetector
 
 
 DB_NAME = "aspc_history.db"
-SIMULATION_MODE = os.getenv("SIMULATION_MODE", "False").lower() == "true"
+
+
+SIMULATION_MODE = True #bật data giả lập
+#os.getenv("SIMULATION_MODE", "False").lower() == "true" 
+
+
+
 # MQTT CẤU HÌNH KẾT NỐI (đọc từ biến môi trường)
 BROKER = os.getenv("MQTT_BROKER", "localhost")
 PORT = int(os.getenv("MQTT_PORT", "8883"))
@@ -84,8 +96,8 @@ energy_state = {
     "E_no_cool_today": 0.0,
     "E_real_month": 0.0,
     "E_no_cool_month": 0.0,
-    "last_day": datetime.date.today().day,
-    "last_month": datetime.date.today().month
+    "last_day": time.localtime().tm_mday,
+    "last_month": time.localtime().tm_mon
 }
 
 #Cấu hình cảnh báo sụt áp
@@ -110,6 +122,11 @@ app.secret_key = os.getenv('SECRET_KEY', 'khoa_bi_mat_sieu_cap_aspc_2026')
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'aspc_production.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# CẤU HÌNH UPLOAD ẢNH
+UPLOAD_FOLDER = os.path.join(basedir, 'static/uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True) # Tự tạo thư mục nếu chưa có
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
 db.init_app(app)
 
 # Tạo các bảng tự động dựa trên models.py
@@ -117,8 +134,27 @@ with app.app_context():
     db.create_all()
     print(" Đã khởi tạo Database Multi-tenant!")
 # KẾT THÚC THÊM CẤU HÌNH 
-# Windows-friendly: tránh phụ thuộc eventlet/gevent gây lỗi khó đoán
+
+
+
+
+
+
+
+
+
+
+
+
+
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+
+
+
+
+
+
+
 
 
 
@@ -289,35 +325,43 @@ def get_weather_cached():
             # Nếu fetch fail thì vẫn trả cache cũ (nếu có)
             return weather_cache.get()
     return weather_cache.get()
+
+
+
+
 #  [MỚI] QUẢN LÝ NĂNG LƯỢNG & HIỆU QUẢ 
+
 class EnergyManager:
     def __init__(self):
         self.last_update_time = time.time()
         
+        # SỬ DỤNG time.localtime() để tránh hoàn toàn lỗi của thư viện datetime
+        current_time_struct = time.localtime()
+        
         # Biến tích lũy Hôm nay
-        self.today_date = datetime.datetime.now().date()
+        self.today_day = current_time_struct.tm_mday
         self.e_real_today = 0.0      # Wh thực tế
         self.e_no_cool_today = 0.0   # Wh giả định nếu không làm mát
         
         # Biến tích lũy Tháng này
-        self.current_month = datetime.datetime.now().month
+        self.current_month = current_time_struct.tm_mon
         self.e_real_month = 0.0
         self.e_no_cool_month = 0.0
 
     def reset_counters_if_needed(self):
-        now = datetime.datetime.now()
+        current_time_struct = time.localtime()
         
         # Reset ngày
-        if now.date() != self.today_date:
+        if current_time_struct.tm_mday != self.today_day:
             self.e_real_today = 0.0
             self.e_no_cool_today = 0.0
-            self.today_date = now.date()
+            self.today_day = current_time_struct.tm_mday
             
         # Reset tháng
-        if now.month != self.current_month:
+        if current_time_struct.tm_mon != self.current_month:
             self.e_real_month = 0.0
             self.e_no_cool_month = 0.0
-            self.current_month = now.month
+            self.current_month = current_time_struct.tm_mon
 
     def calculate_step(self, p_real_W, lux, temp_env, p_max, alpha_p):
         """
@@ -336,25 +380,13 @@ class EnergyManager:
         wh_real_step = p_real_W * dt_hours
         
         # 2. Tính Wh giả định "Nếu không làm mát" (No Cool)
-        # B1: Dùng AI dự báo nhiệt độ tấm pin nếu tắt bơm (Pump=0)
-        # Lưu ý: predict_scenario trả về nhiệt độ dự báo 5 phút tới, ta dùng nó làm nhiệt độ trung bình
-        pred_temp_no_cool = ai_brain.predict_scenario(0) 
-        
-        if pred_temp_no_cool is None:
-            # Fallback nếu AI chưa chạy: Giả sử nóng hơn môi trường 10-20 độ tùy nắng
-            pred_temp_no_cool = temp_env + (lux / 4000) 
+        # Giả sử nóng hơn môi trường 10-20 độ tùy nắng
+        pred_temp_no_cool = temp_env + (lux / 4000) 
 
         # B2: Tính công suất giả định (Công thức vật lý tấm pin)
         # P = P_max * (Lux/100000) * [1 + alpha * (T - 25)]
-        # Đây là công suất lý thuyết tại nhiệt độ nóng đó
-        
-        # Tỷ lệ cường độ sáng (Giả sử 100k lux đạt chuẩn)
         irradiance_ratio = lux / 100000.0 if lux > 0 else 0
-        
-        # Hệ số suy giảm do nhiệt (alpha thường là âm, ví dụ -0.004)
-        # Trong optimizer.py bạn dùng alpha dương (0.004) rồi trừ, ở đây ta dùng logic tương tự
         loss_factor = alpha_p * (pred_temp_no_cool - 25)
-        
         p_no_cool_W = p_max * irradiance_ratio * (1 - loss_factor)
         
         # Đảm bảo không âm
@@ -398,7 +430,6 @@ class EnergyManager:
             "z_month_percent": round(z_percent, 1),
             "total_real_kwh_today": round(self.e_real_today / 1000, 3)
         }
-
 
 
 
@@ -917,6 +948,100 @@ def run_mqtt():
 
 
 
+# KHỐI LOGIC: XỬ LÝ VIDEO CAMERA AI
+
+
+# Lấy đường dẫn tuyệt đối của thư mục đang chứa file app.py
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+VIDEO_SOURCE = os.path.join(BASE_DIR, "demo_solar.mp4")
+
+def generate_video_frames():
+    """Hàm tạo luồng hình ảnh liên tục cho Camera AI trên Web"""
+    cap = cv2.VideoCapture(VIDEO_SOURCE)
+    
+    # Nếu không mở được video, trả về một ảnh đen báo lỗi
+    if not cap.isOpened():
+        error_img = np.zeros((480, 854, 3), dtype=np.uint8)
+        cv2.putText(error_img, f"ERROR: CANNOT LOAD '{VIDEO_SOURCE}'", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        ret, buffer = cv2.imencode('.jpg', error_img)
+        frame_bytes = buffer.tobytes()
+        yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        time.sleep(0.05)
+        return
+    
+
+    frame_count = 0
+
+    while True:
+        success, frame = cap.read()
+        if not success:
+            # Hết video thì tua lại từ đầu
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            continue
+            
+        frame_count += 1
+        
+        # Resize nhẹ để mượt mà trên web
+        frame = cv2.resize(frame, (854, 480))
+        annotated_frame = frame.copy()
+
+        warning_active = False
+
+        # --- Thuật toán lọc màu sáng (Phân chim/Bụi) ---
+        hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        lower_white = np.array([0, 0, 160])    
+        upper_white = np.array([180, 50, 255]) 
+        mask = cv2.inRange(hsv_frame, lower_white, upper_white)
+
+        # Xóa nhiễu
+        kernel = np.ones((5,5), np.uint8)
+        mask_clean = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+
+        # Tìm các đốm trắng
+        contours, _ = cv2.findContours(mask_clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        for contour in contours:
+            area = cv2.contourArea(contour)
+            # Chỉ bắt đốm to vừa phải
+            if 50 < area < 2000:
+                x, y, w, h = cv2.boundingRect(contour)
+                fake_prob = min(99, 75 + (int(area) % 24))
+                
+                # Vẽ khung Cam
+                cv2.rectangle(annotated_frame, (x, y), (x + w, y + h), (0, 165, 255), 2)
+                
+                # Vẽ text cho đốm lớn
+                if area > 300:
+                    cv2.putText(annotated_frame, f"Bird Drop {fake_prob}%", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 165, 255), 1)
+                
+                warning_active = True
+
+        # --- Vẽ HUD (Giao diện Kính ngắm trên góc) ---
+        overlay = annotated_frame.copy()
+        cv2.rectangle(overlay, (0, 0), (854, 60), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.6, annotated_frame, 0.4, 0, annotated_frame)
+        
+        cv2.putText(annotated_frame, "ASPC VISION AI SCANNING...", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+        
+        if warning_active:
+            if frame_count % 10 < 5: 
+                cv2.putText(annotated_frame, "WARNING: HOTSPOT RISK DETECTED!", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+        else:
+            cv2.putText(annotated_frame, "STATUS: PANELS CLEAR", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+
+        # Chuyển thành chuỗi byte JPG
+        ret, buffer = cv2.imencode('.jpg', annotated_frame)
+        frame_bytes = buffer.tobytes()
+        
+        # Trả về từng frame cho Web
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+# ==========================================
+
+@app.route('/video_feed')
+def video_feed():
+    """Route xuất luồng Video cho thẻ <img> trên giao diện hotspot.html"""
+    return Response(generate_video_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # [API MỚI] Lưu thông số tấm pin từ trang Parameter
 @app.route('/api/save_params', methods=['POST'])
@@ -1045,6 +1170,7 @@ def login_page():
         if user and check_password_hash(user.password_hash, password):
             session['user_id'] = user.id
             session['username'] = user.username
+            session['avatar'] = user.avatar or ""
             return redirect(url_for('dashboard'))
         else:
             flash("Tên đăng nhập hoặc mật khẩu không chính xác!", "danger")
@@ -1081,46 +1207,59 @@ def logout():
     session.clear() # Xóa phiên
     return redirect(url_for('home'))
 
+
+
 # --- ROUTES GIAO DIỆN CHÍNH (ĐÃ KHÓA) ---
 @app.route('/')
 def home(): 
     return render_template('home_page.html')
 
 @app.route('/index.html')
-@login_required # <--- CHÍNH CÁI CHỮ NÀY LÀ Ổ KHÓA!
+@login_required 
 def dashboard(): 
-    return render_template('index.html')
+    avatar = session.get('avatar', '') # Lấy tên ảnh từ Session
+    return render_template('index.html', avatar=avatar)
 
 @app.route('/health.html')
 @login_required
 def health(): 
-    return render_template('health.html')
+    avatar = session.get('avatar', '')
+    return render_template('health.html', avatar=avatar)
 
 @app.route('/history.html')
 @login_required
 def history(): 
-    return render_template('history.html')
+    avatar = session.get('avatar', '')
+    return render_template('history.html', avatar=avatar)
 
 @app.route('/parameter.html')
 @login_required
 def parameter(): 
-    return render_template('parameter.html')
+    avatar = session.get('avatar', '')
+    return render_template('parameter.html', avatar=avatar)
 
 @app.route('/hotspot.html')
 @login_required
 def hotspot_page(): 
-    return render_template('hotspot.html')
+    avatar = session.get('avatar', '')
+    return render_template('hotspot.html', avatar=avatar)
 
 @app.route('/weather.html')
 @login_required
 def weather_page(): 
-    return render_template('weather.html')
+    avatar = session.get('avatar', '')
+    return render_template('weather.html', avatar=avatar)
+
+@app.route('/profile.html')
+@login_required
+def profile_page():
+    avatar = session.get('avatar', '')
+    return render_template('profile.html', avatar=avatar)
 
 
 
 
-
-
+# CÁC HÀM API DỮ LIỆU
 
 @app.route('/api/get_history')
 def get_history_api():
@@ -1155,6 +1294,79 @@ def get_economic_report_api(year, month):
     
 
 
+# API QUẢN LÝ HỒ SƠ NGƯỜI DÙNG (PROFILE)
+
+@app.route('/api/profile/get', methods=['GET'])
+@login_required
+def get_profile():
+    user = User.query.get(session['user_id'])
+    return jsonify({
+        "username": user.username,
+        "full_name": user.full_name or "",
+        "phone": user.phone or "",
+        "address": user.address or "",
+        "avatar": user.avatar or "",
+        "last_password_change": user.last_password_change.strftime("%d/%m/%Y") if user.last_password_change else "Chưa từng đổi"
+    })
+
+@app.route('/api/profile/update_info', methods=['POST'])
+@login_required
+def update_info():
+    user = User.query.get(session['user_id'])
+    data = request.json
+    user.full_name = data.get('full_name')
+    user.phone = data.get('phone')
+    user.address = data.get('address')
+    db.session.commit()
+    return jsonify({"status": "success", "message": "Cập nhật thông tin thành công!"})
+
+@app.route('/api/profile/upload_avatar', methods=['POST'])
+@login_required
+def upload_avatar():
+    if 'avatar' not in request.files:
+        return jsonify({"status": "error", "message": "Không tìm thấy file!"}), 400
+    
+    file = request.files['avatar']
+    if file.filename == '':
+        return jsonify({"status": "error", "message": "Chưa chọn file!"}), 400
+
+    # Lưu file
+    filename = secure_filename(f"user_{session['user_id']}_{int(time.time())}.png")
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    file.save(filepath)
+
+    # Cập nhật DB
+    user = User.query.get(session['user_id'])
+    user.avatar = filename
+    db.session.commit()
+    
+    session['avatar'] = filename # Lưu vào session để dùng chung
+    return jsonify({"status": "success", "avatar_url": f"/static/uploads/{filename}"})
+
+@app.route('/api/profile/change_password', methods=['POST'])
+@login_required
+def change_password():
+    user = User.query.get(session['user_id'])
+    data = request.json
+    old_pass = data.get('old_password')
+    new_pass = data.get('new_password')
+
+    # 1. Kiểm tra mật khẩu cũ
+    if not check_password_hash(user.password_hash, old_pass):
+        return jsonify({"status": "error", "message": "Mật khẩu cũ không chính xác!"})
+
+    # 2. KIỂM TRA ĐIỀU KIỆN 30 NGÀY
+    if user.last_password_change:
+        days_passed = (datetime.utcnow() - user.last_password_change).days
+        if days_passed < 30:
+            return jsonify({"status": "error", "message": f"Bạn vừa đổi mật khẩu gần đây! Vui lòng đợi {30 - days_passed} ngày nữa."})
+
+    # 3. Đổi pass thành công
+    user.password_hash = generate_password_hash(new_pass, method='pbkdf2:sha256')
+    user.last_password_change = datetime.utcnow()
+    db.session.commit()
+    
+    return jsonify({"status": "success", "message": "Đổi mật khẩu thành công!"})
 
 
 
@@ -1203,6 +1415,10 @@ def serve_static(filename):
         try: return render_template(filename)
         except: return "File not found", 404
     return "", 404
+
+
+
+
 # --- GIẢ LẬP THÔNG MINH (SMART SIMULATION) ---
 def run_simulation():
     print("🌊 [SIMULATION] KÍCH HOẠT CHẾ ĐỘ 'LÀM MÁT CỰC MẠNH'...")
@@ -1300,6 +1516,8 @@ def run_simulation():
             if eff < 0.5: eff = 0.5
             sim_power = (sim_state['lux']/1000.0) * 0.5 * eff # Công thức giả định P=50W
 
+
+
       
         # GỬI DỮ LIỆU ĐI
         fake_payload = {
@@ -1318,6 +1536,24 @@ def run_simulation():
             on_message(None, None, MockMsg())
         except: pass
         
+       
+        # BẮT ĐẦU CHÈN THÊM ĐỂ WEB HIỂN THỊ ĐỦ THÔNG SỐ
+       
+
+        # 1. Bơm dữ liệu AI dự báo (Tạo cái đuôi nét đứt trên biểu đồ)
+        mock_pred_temp = sim_state['temp_panel'] + (target_temp_dry - sim_state['temp_panel']) * 0.2
+        socketio.emit('ai_data', {'ai': {'pred_temp_5min': round(mock_pred_temp, 2)}})
+
+        # 2. Bơm dữ liệu Kinh tế ảo (Để 2 thẻ màu xanh lá + cam nó nhảy)
+        socketio.emit('efficiency_data', {
+            "x_today_kwh": round(random.uniform(2.5, 5.0), 3),
+            "y_today_vnd": int(random.uniform(50000, 120000))
+        })
+        
+       
+        # KẾT THÚC CHÈN THÊM
+        
+
         # LOG MÀU MÈ ĐỂ DỄ NHÌN
         status_icon = "💦 MÁT" if sim_state['pump_status'] == 1 else "🔥 NÓNG"
         print(f"[{status_icon}] Temp: {fake_payload['temp_panel']:5.2f}°C (Target: {final_target:.1f}) | Lux: {fake_payload['lux_ref']}")
@@ -1328,7 +1564,7 @@ def run_simulation():
         # if sim_state['temp_panel'] > 60: sim_state['pump_status'] = 1
         # if sim_state['temp_panel'] < 35: sim_state['pump_status'] = 0
 
-        time.sleep(1.0)
+        time.sleep(0.5)
 
 
 

@@ -8,7 +8,16 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
+    # --- CÁC CỘT MỚI THÊM CHO TRANG PROFILE ---
+    full_name = db.Column(db.String(100), nullable=True)
+    phone = db.Column(db.String(20), nullable=True)
+    address = db.Column(db.String(200), nullable=True)
+    avatar = db.Column(db.String(200), nullable=True) # Lưu tên file ảnh
+    last_password_change = db.Column(db.DateTime, nullable=True) # Lưu ngày đổi pass
+    
+    
     stations = db.relationship('Station', backref='owner', lazy=True)
+
 
 class Station(db.Model):
     __tablename__ = 'stations'

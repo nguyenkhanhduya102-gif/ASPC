@@ -40,13 +40,46 @@
         .btn-toggle:hover { background: #f1f5f9; color: #0f172a; }
         .station-select { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 12px; font-weight: 600; color: #334155; font-size: 0.9rem;}
         
-        /*  UI COMPONENTS  */
-        /* Thẻ thống kê (Card) */
-        .stat-card { background: #fff; border-radius: 12px; padding: 20px; border: none; box-shadow: 0 2px 10px rgba(0,0,0,0.02); display: flex; align-items: center; margin-bottom: 20px; transition: transform 0.2s; }
+                /* Thẻ thống kê (Card) - Bổ sung height: 100% để các thẻ bằng nhau */
+        .stat-card { 
+            background: #fff; 
+            border-radius: 12px; 
+            padding: 20px; 
+            border: none; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.02); 
+            display: flex; 
+            align-items: center; 
+            margin-bottom: 20px; 
+            transition: transform 0.2s; 
+            height: calc(100% - 20px); /* BẮT BUỘC: Ép chiều cao full cột */
+        }
         .stat-card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
-        .stat-icon { width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-right: 15px; }
-        .stat-content p { margin: 0; font-size: 0.85rem; color: #64748b; font-weight: 500; text-transform: uppercase;}
-        .stat-content h4 { margin: 0; font-size: 1.5rem; font-weight: 700; color: #0f172a; margin-top: 5px;}
+        
+        .stat-icon { min-width: 50px; height: 50px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-right: 15px; }
+        
+        /* Ép tiêu đề không rớt dòng, nếu dài quá thì hiện dấu 3 chấm (...) */
+        .stat-content { overflow: hidden; width: 100%; }
+        .stat-content p { 
+            margin: 0; 
+            font-size: 0.8rem; 
+            color: #64748b; 
+            font-weight: 600; 
+            text-transform: uppercase;
+            white-space: nowrap; 
+            overflow: hidden; 
+            text-overflow: ellipsis; 
+        }
+        /* Cỡ chữ đồng đều cho các số liệu, nếu số dài tự động thu nhỏ nhẹ */
+        .stat-content h4 { 
+            margin: 0; 
+            font-size: 1.35rem; 
+            font-weight: 700; 
+            color: #0f172a; 
+            margin-top: 5px;
+            white-space: nowrap; 
+            overflow: hidden; 
+            text-overflow: ellipsis; 
+        }
         
         /* Màu icon thống kê */
         .icon-temp { background: #fff0f2; color: #ef4444; }
@@ -116,15 +149,20 @@
             
             <div class="d-flex align-items-center">
                 <select id="station-selector" class="form-select station-select me-3" onchange="changeStation(this.value)">
-                    <option value="ESP32_DEFAULT">📍 Trạm Sài Gòn (Mặc định)</option>
+                    <option value="ESP32_DEFAULT">📍 Trạm Hà Nội (Mặc định)</option>
                     <option value="ESP32_002">📍 Trạm Đà Lạt</option>
                 </select>
 
                 <!-- DROPDOWN PROFILE NGƯỜI DÙNG -->
 <div class="dropdown ms-3">
     <a href="#" class="d-flex align-items-center text-decoration-none" id="dropdownUser" data-bs-toggle="dropdown" aria-expanded="false">
-        <!-- Tự động lấy tên User từ Session để tạo Avatar -->
-        <img src="https://ui-avatars.com/api/?name={{ session.get('username', 'U') }}&background=3b82f6&color=fff&bold=true" alt="Avatar" width="40" height="40" class="rounded-circle shadow-sm border border-2 border-white">
+        {% if avatar %}
+            <!-- Nếu có ảnh thật thì load ảnh thật -->
+            <img src="/static/uploads/{{ avatar }}" alt="Avatar" width="40" height="40" class="rounded-circle shadow-sm border border-2 border-white" style="object-fit: cover;">
+        {% else %}
+            <!-- Nếu chưa có ảnh thì dùng ảnh chữ cái mặc định -->
+            <img src="https://ui-avatars.com/api/?name={{ session.get('username', 'U') }}&background=3b82f6&color=fff&bold=true" alt="Avatar" width="40" height="40" class="rounded-circle shadow-sm border border-2 border-white">
+        {% endif %}
     </a>
     
     <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 mt-2" aria-labelledby="dropdownUser" style="min-width: 250px; border-radius: 12px;">
@@ -136,9 +174,9 @@
         </li>
         
         <!-- Các nút chức năng -->
-        <li class="mt-2"><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-id-card me-2 text-primary"></i> Quản lý hồ sơ</a></li>
-        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-camera me-2 text-info"></i> Đổi ảnh đại diện</a></li>
-        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="#"><i class="fas fa-cog me-2 text-secondary"></i> Cài đặt bảo mật</a></li>
+        <li class="mt-2"><a class="dropdown-item py-2 fw-medium text-secondary" href="profile.html"><i class="fas fa-id-card me-2 text-primary"></i> Quản lý hồ sơ</a></li>
+        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="profile.html"><i class="fas fa-camera me-2 text-info"></i> Đổi ảnh đại diện</a></li>
+        <li><a class="dropdown-item py-2 fw-medium text-secondary" href="profile.html"><i class="fas fa-cog me-2 text-secondary"></i> Cài đặt bảo mật</a></li>
         
         <li><hr class="dropdown-divider my-2"></li>
         
