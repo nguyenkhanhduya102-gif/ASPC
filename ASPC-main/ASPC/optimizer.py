@@ -53,7 +53,7 @@ class SolarOptimizer:
         loss_factor_on = self.alpha_p * (t_pred_on - 25)
         p_pv_on = p_max_stc * (1 - loss_factor_on)
 
-        time_hours = 5 / 60.0 # 5 phút
+        time_hours = 15 / 60.0 # 5 phút
         
         # Lợi ích: Thêm được bao nhiêu Wh điện?
         e_gain = (p_pv_on - p_pv_off) * time_hours

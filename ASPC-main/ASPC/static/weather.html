@@ -34,6 +34,8 @@
         
         .w-card { background: #fff; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0; display: flex; align-items: center; gap: 15px;}
         .w-icon { width: 50px; height: 50px; border-radius: 50%; background: #f1f5f9; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; color: #3b82f6; flex-shrink: 0;}
+        .locked-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(8px); z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border-radius: 12px; }
+        .relative-container { position: relative; }
     </style>
 </head>
 <body>
@@ -96,7 +98,15 @@
 
 
 
-
+<div class="relative-container">
+            {% if tier == 'FREE' %}
+            <div class="locked-overlay">
+                <i class="fas fa-lock fs-1 text-secondary mb-3"></i>
+                <h3 class="fw-bold text-dark">Tính Năng Giới Hạn</h3>
+                <p class="text-muted">Tính năng Dự báo Khí tượng yêu cầu gói <strong class="text-info">PRO</strong>.</p>
+                <a href="profile.html" class="btn btn-primary mt-2">Nâng cấp ngay</a>
+            </div>
+            {% endif %}
                 <!-- MAIN DASHBOARD -->
         <div class="container-fluid p-4">
             
@@ -173,6 +183,7 @@
             </div>
 
         </div> <!-- End Container -->
+</div>
 
     <script>
         document.getElementById('sidebarCollapse').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('collapsed'));

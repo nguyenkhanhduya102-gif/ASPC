@@ -68,6 +68,12 @@ function saveSettingsToAPI() {
     const pPumpVal = parseFloat(document.getElementById('p_pump').value);
     const monthlyKwhVal = parseFloat(document.getElementById('monthly_kwh').value);
     const alphaVal = parseFloat(document.getElementById('alpha_p').value);
+    if (isNaN(alphaVal) || alphaVal <= 0) {
+        alert("⚠️ Lỗi: Hệ số suy hao nhiệt phải là số dương (vd: 0.4)!");
+        document.getElementById('alpha_p').focus();
+        return;
+    }
+    
     // --- VALIDATION (QUAN TRỌNG) ---
     // Kiểm tra kỹ trước khi gửi để tránh làm hỏng file JSON trên server
     if (isNaN(pMaxVal) || pMaxVal <= 0) {

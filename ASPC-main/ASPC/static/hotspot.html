@@ -39,6 +39,8 @@
         
         .alert-item { padding: 15px; border-radius: 8px; border-left: 4px solid #ef4444; background: #fef2f2; margin-bottom: 15px;}
         .alert-item.safe { border-left-color: #10b981; background: #ecfdf5; }
+        .locked-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(8px); z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border-radius: 12px; }
+        .relative-container { position: relative; }
     </style>
 </head>
 <body>
@@ -99,6 +101,16 @@
             </div>
         </div>
 
+
+        <div class="relative-container">
+    {% if tier != 'PREMIUM' %}
+    <div class="locked-overlay">
+        <i class="fas fa-crown fs-1 text-warning mb-3"></i>
+        <h3 class="fw-bold text-dark">Dành Riêng Cho Doanh Nghiệp</h3>
+        <p class="text-muted">Quét điểm nóng bằng Computer Vision yêu cầu gói <strong class="text-warning">PREMIUM</strong>.</p>
+        <a href="profile.html" class="btn btn-warning text-dark fw-bold mt-2">Nâng cấp Premium</a>
+    </div>
+    {% endif %}
         <div class="container-fluid p-4">
             <h5 class="fw-bold mb-3"><i class="fas fa-camera text-danger me-2"></i> Giám Sát Bề Mặt (Thermal Vision)</h5>
             
@@ -188,6 +200,8 @@
             </div>
         </div>
     </div>
+    </div>
+    
 
     <script>
         document.getElementById('sidebarCollapse').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('collapsed'));

@@ -1,17 +1,12 @@
 /**
  * File: index.js
- * Tính năng: Vẽ biểu đồ với hiệu ứng "Đuôi dự báo" (Projection Tail)
  */
-
 const socket = io();
 const currentDeviceMac = localStorage.getItem('device_id') || 'ESP32_DEFAULT';
 let currentMode = 'MANUAL'; 
-let lastControlTime = 0;
-// --- KHAI BÁO BIẾN DỮ LIỆU ---
-let tempChart;
-const maxDataPoints = 20; // Số điểm lịch sử giữ lại
 
-// Mảng lưu trữ lịch sử thực tế (để không bị mất khi vẽ lại đuôi)
+let tempChart;
+const maxDataPoints = 20; 
 let historyLabels = [];
 let historyData = [];
 let latestAiPred = null;
@@ -22,7 +17,6 @@ document.addEventListener("DOMContentLoaded", function () {
     setupControlButtons();
 });
 
-// --- 1. CẤU HÌNH BIỂU ĐỒ (STYLE GIỐNG HỆT ẢNH) ---
 function initChart() {
     const ctx = document.getElementById('temperatureChart').getContext('2d');
     tempChart = new Chart(ctx, {
@@ -30,142 +24,113 @@ function initChart() {
         data: {
             labels: [], 
             datasets: [
-                {
-                    // ĐƯỜNG 1: THỰC TẾ (MÀU CAM)
-                    label: 'Nhiệt Độ Tấm Pin (°C)',
-                    data: [],
-                    borderColor: '#e67e22',       // Cam đậm
-                    backgroundColor: 'rgba(230, 126, 34, 0.2)', // Nền cam nhạt
-                    borderWidth: 2,
-                    tension: 0.3,                 
-                    fill: true,                   // Bật tô nền
-                    pointBackgroundColor: '#e67e22',
-                    pointRadius: 4
-                },
-                {
-                    // ĐƯỜNG 2: DỰ BÁO (XANH CYAN NÉT ĐỨT)
-                    label: 'Dự Báo AI (5 phút tới)',
-                    data: [],
-                    borderColor: '#00d2d3',       // Xanh cyan
-                    backgroundColor: 'transparent', 
-                    borderWidth: 2,
-                    borderDash: [5, 5],           // Nét đứt cầu nối
-                    tension: 0,                   // Đường thẳng nối 2 điểm
-                    fill: false,
-                    pointBackgroundColor: '#00d2d3',
-                    pointRadius: 5,               // Điểm tròn dự báo to hơn chút
-                    pointStyle: 'rectRot'         // Hình thoi cho khác biệt
-                }
+                { label: 'Nhiệt Độ Tấm Pin (°C)', data: [], borderColor: '#e67e22', backgroundColor: 'rgba(230, 126, 34, 0.2)', borderWidth: 2, tension: 0.3, fill: true, pointBackgroundColor: '#e67e22', pointRadius: 4 },
+                { label: 'Dự Báo AI (15 phút tới)', data: [], borderColor: '#00d2d3', backgroundColor: 'transparent', borderWidth: 2, borderDash: [5, 5], tension: 0, fill: false, pointBackgroundColor: '#00d2d3', pointRadius: 5, pointStyle: 'rectRot' }
             ]
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: {
-                mode: 'index',
-                intersect: false,
-            },
-            plugins: {
-                legend: { position: 'top' },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            // Format lại tooltip cho dễ đọc
-                            return context.dataset.label + ': ' + context.parsed.y + ' °C';
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: false,
-                    title: { display: false }
-                },
-                x: {
-                    display: true,
-                    ticks: { autoSkip: true, maxTicksLimit: 6 }
-                }
-            },
+            responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+            plugins: { legend: { position: 'top' } },
+            scales: { y: { beginAtZero: false, title: { display: false } }, x: { display: true, ticks: { autoSkip: true, maxTicksLimit: 6 } } },
             animation: { duration: 0 } 
         }
     });
 }
 
-// --- HÀM VẼ BIỂU ĐỒ NÂNG CAO ---
 function updateChartData(currentTemp) {
     if (!tempChart) return;
-
     const now = new Date();
     const timeNowStr = now.toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit', second:'2-digit'});
     
-    // 1. Cập nhật mảng Lịch Sử (History Arrays)
     historyLabels.push(timeNowStr);
     historyData.push(currentTemp);
+    if (historyLabels.length > maxDataPoints) { historyLabels.shift(); historyData.shift(); }
 
-    // Giới hạn độ dài lịch sử
-    if (historyLabels.length > maxDataPoints) {
-        historyLabels.shift();
-        historyData.shift();
-    }
-
-    // 2. Tạo điểm Dự Báo Tương Lai (Future Point)
-    // Tính thời gian 5 phút sau
-    const futureTime = new Date(now.getTime() + 5 * 60000); 
+    const futureTime = new Date(now.getTime() + 15 * 60000); 
     const futureTimeStr = futureTime.toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'});
-
-    // Lấy giá trị AI (Nếu chưa có thì lấy bằng hiện tại để không bị lỗi)
     const futureVal = latestAiPred !== null ? latestAiPred : currentTemp;
 
-    // 3. Tái cấu trúc dữ liệu để hiển thị lên Chart
-    // Mẹo: Dataset "Thực tế" sẽ có thêm 1 điểm null ở cuối để nhường chỗ cho tương lai
-    // Dataset "Dự báo" sẽ toàn null, chỉ có 2 điểm cuối cùng nối với nhau.
-
-    // A. Label: Lịch sử + 1 nhãn tương lai
     tempChart.data.labels = [...historyLabels, futureTimeStr];
-
-    // B. Dataset Thực tế: Lịch sử + null
     tempChart.data.datasets[0].data = [...historyData, null];
 
-    // C. Dataset Dự báo: Một mảng toàn null + Điểm hiện tại + Điểm tương lai
-    // Mục đích: Để vẽ một đường nối từ điểm thực tế cuối cùng đến điểm dự báo
     const emptyPadding = Array(historyData.length - 1).fill(null);
     tempChart.data.datasets[1].data = [...emptyPadding, currentTemp, futureVal];
-
-    // 4. Cập nhật giao diện
     tempChart.update();
 }
 
+function updateText(id, text) {
+    const el = document.getElementById(id);
+    if (el) el.innerText = text;
+}
 
 
-
-// --- 2. XỬ LÝ SOCKET (GIỮ NGUYÊN LOGIC CŨ) ---
+// 1. NHẬN DỮ LIỆU CẢM BIẾN (CHỈ DÙNG 1 HÀM NÀY)
 
 socket.on('sensor_data', (data) => {
-    // 1. Cập nhật các ô thông số nhỏ
     updateText('current-temp', data.temp_env + ' °C');
     updateText('humidity', data.humidity + ' %');
     updateText('light-intensity', data.lux + ' Lux');
     updateText('solar-temp', data.temp_panel + ' °C');
     
-    if(data.health_score !== undefined) {
-        updateText('efficiency', Math.round(data.health_score) + '%');
-    }
+    if(data.health_score !== undefined) updateText('efficiency', Math.round(data.health_score) + '%');
     
-    // Đồng bộ hiển thị bụi từ hotspot pipeline
     const dustEl = document.getElementById('dust-level');
-    if (dustEl) {
-        const dust = (typeof data.dust_level === 'number') ? data.dust_level : 0;
-        dustEl.textContent = `${dust.toFixed(1)} %`; // Thêm chữ % cho đẹp
+    if (dustEl && typeof data.dust_level === 'number') dustEl.textContent = `${data.dust_level.toFixed(1)} %`;
+
+    updateChartData(data.temp_panel);
+
+    // Xử lý 2 ô Làm mát / Làm sạch
+    const boxCooling = document.getElementById('status-cooling');
+    const boxCleaning = document.getElementById('status-cleaning');
+    const iconCooling = document.getElementById('icon-cooling');
+    const iconCleaning = document.getElementById('icon-cleaning');
+    const reasonText = document.getElementById('pump-reason-text');
+
+    if (boxCooling && boxCleaning && data.pump_mode) {
+        boxCooling.className = "p-2 border rounded text-center bg-light text-muted";
+        boxCleaning.className = "p-2 border rounded text-center bg-light text-muted";
+        iconCooling.className = "fas fa-snowflake fs-4 mb-1";
+        iconCleaning.className = "fas fa-shower fs-4 mb-1";
+        boxCooling.style.backgroundColor = ""; boxCleaning.style.backgroundColor = "";
+
+        if (data.pump_status === 1 || data.pump_status === true || data.pump_status === "1") {
+            if (data.pump_mode === 'COOLING') {
+                boxCooling.className = "p-2 border border-primary rounded text-center text-white shadow-sm";
+                boxCooling.style.backgroundColor = "#0d6efd";
+                iconCooling.className = "fas fa-snowflake fs-4 mb-1 fa-spin";
+            } else if (data.pump_mode === 'CLEANING') {
+                boxCleaning.className = "p-2 border border-info rounded text-center text-white shadow-sm";
+                boxCleaning.style.backgroundColor = "#0dcaf0";
+                iconCleaning.className = "fas fa-shower fs-4 mb-1 fa-bounce";
+            } else if (data.pump_mode === 'MANUAL') {
+                boxCooling.className = "p-2 border border-warning rounded text-center text-dark shadow-sm bg-warning";
+                boxCleaning.className = "p-2 border border-warning rounded text-center text-dark shadow-sm bg-warning";
+                iconCooling.className = "fas fa-cog fs-4 mb-1 fa-spin";
+                iconCleaning.className = "fas fa-cog fs-4 mb-1 fa-spin";
+            }
+        }
+        if (data.pump_reason) reasonText.innerHTML = `<i class="fas fa-robot me-1 text-primary"></i> <b>AI:</b> ${data.pump_reason}`;
     }
 
-    // Cập nhật trạng thái nút bơm
-    updatePumpStatusUI(data.pump_status, 'cool');
-    
-    // GỌI HÀM VẼ BIỂU ĐỒ NÂNG CAO (của bạn)
-    updateChartData(data.temp_panel);
+    // Logic nút Bật Tắt:
+    // Nếu web báo MANUAL nhưng giả lập backend (của bạn) lại tự bật bơm -> nó sẽ đổi nút loạn lên.
+    // Ở đây ta ép giao diện hiển thị đúng với trạng thái thực tế từ backend gửi về.
+        // Dựa vào pump_mode để web biết đang bật LÀM MÁT (cool) hay LÀM SẠCH (clean)
+        
+    if (data.pump_status == 0) {
+        // Nếu bơm đang tắt -> Ép tắt CẢ 2 NÚT trên UI để không bao giờ bị kẹt
+        updatePumpStatusUI(0, 'cool');
+        updatePumpStatusUI(0, 'clean');
+    } else {
+        // Nếu bơm đang bật -> Thằng nào được bật thì sáng nút thằng đó
+        const uiType = (data.pump_mode === 'CLEANING') ? 'clean' : 'cool';
+        updatePumpStatusUI(1, uiType);
+    }
 });
 
-// THÊM SỰ KIỆN NÀY ĐỂ BẮT DỮ LIỆU KINH TẾ TỪ HÀM GIẢ LẬP
+
+// 2. NHẬN DỮ LIỆU HIỆU QUẢ KINH TẾ
+
 socket.on('efficiency_data', (data) => {
     const profitEl = document.getElementById('eco-profit');
     const energyEl = document.getElementById('eco-energy');
@@ -174,47 +139,42 @@ socket.on('efficiency_data', (data) => {
         profitEl.innerText = new Intl.NumberFormat('vi-VN').format(Math.round(data.y_today_vnd)) + " đ";
     }
     
+    // Bắt đúng biến x_today_kwh từ Backend
     if(energyEl && data.x_today_kwh !== undefined) {
         energyEl.innerText = data.x_today_kwh.toFixed(3) + " kWh";
     }
 });
 
-
 socket.on('ai_data', (data) => {
-    if (data.ai && data.ai.pred_temp_5min) {
-        latestAiPred = data.ai.pred_temp_5min;
-        
-        // Hiển thị tốc độ tăng
+    if (data.ai && data.ai.pred_temp_15min) {
+        latestAiPred = data.ai.pred_temp_15min;
         let currentT = historyData.length > 0 ? historyData[historyData.length - 1] : 0;
         if (currentT > 0) {
             let rate = (latestAiPred - currentT).toFixed(2);
             let sign = rate > 0 ? '+' : '';
-            updateText('temp-rate', `${sign}${rate} °C/5p`);
+            updateText('temp-rate', `${sign}${rate} °C/15p`);
         }
     }
 });
 
-socket.on('economic_data', (data) => {
-    if(data.profit) document.getElementById('eco-profit').innerText = Math.round(data.profit) + " đ";
-    if(data.delta_e) document.getElementById('eco-energy').innerText = data.delta_e.toFixed(2) + " Wh";
-});
+
+
+// 3. XỬ LÝ CHUYỂN CHẾ ĐỘ & ĐIỀU KHIỂN NÚT
 
 socket.on('mode_update', (data) => {
     currentMode = data.mode;
     if (currentMode === 'AUTO') {
         document.getElementById('mode_auto').checked = true;
         document.getElementById("mode-desc").innerText = "Hệ thống tự động theo ngưỡng nhiệt độ.";
-        document.getElementById("economic-stats").style.display = "none";
     } else if (currentMode === 'SMART_ECO') {
         document.getElementById('mode_smart').checked = true;
         document.getElementById("mode-desc").innerText = "AI tự động tính toán Lãi/Lỗ.";
-        document.getElementById("economic-stats").style.display = "block";
     } else {
         document.getElementById('mode_manual').checked = true;
         document.getElementById("mode-desc").innerText = "Bạn toàn quyền kiểm soát.";
-        document.getElementById("economic-stats").style.display = "none";
     }
     
+    // Khóa/Mở tất cả 4 nút
     const btns = [
         document.getElementById('btn-cool-on'), document.getElementById('stop-cool-btn'),
         document.getElementById('btn-clean-on'), document.getElementById('stop-clean-btn')
@@ -233,15 +193,14 @@ document.querySelectorAll('input[name="sys_mode"]').forEach((elem) => {
     });
 });
 
-// --- 4. HÀM ĐIỀU KHIỂN & UI (ĐÃ NÂNG CẤP CHỐNG SPAM NÚT) ---
 function setupControlButtons() {
+    // Nút LÀM MÁT -> Gửi chữ COOL
     const btnCoolOn = document.getElementById('btn-cool-on');
     const btnCoolOff = document.getElementById('stop-cool-btn');
-    
     if(btnCoolOn) btnCoolOn.addEventListener('click', () => sendCommand('2', 'COOL'));
     if(btnCoolOff) btnCoolOff.addEventListener('click', () => sendCommand('0', 'COOL'));
-    
-    // Nếu có nút Clean (Rửa pin)
+
+    // Nút LÀM SẠCH -> Gửi chữ CLEAN
     const btnCleanOn = document.getElementById('btn-clean-on');
     const btnCleanOff = document.getElementById('stop-clean-btn');
     if(btnCleanOn) btnCleanOn.addEventListener('click', () => sendCommand('2', 'CLEAN'));
@@ -253,19 +212,15 @@ function sendCommand(cmd, type) {
         alert("⚠️ Vui lòng chuyển sang chế độ THỦ CÔNG để điều khiển!");
         return;
     }
-
-    // 1. Gửi lệnh đi
+    // Gửi lệnh lên Server
     socket.emit('send_control', {mac_address: currentDeviceMac, command: cmd, type: type, user_id: 'WEB' });
-    // B. [QUAN TRỌNG] Cập nhật giao diện NGAY LẬP TỨC (Không chờ Server)
-    // Nếu cmd = '2' (Bật) -> Trạng thái giả lập là 1
-    // Nếu cmd = '0' (Tắt) -> Trạng thái giả lập là 0
-    let tempStatus = (cmd === '2') ? 1 : 0;
     
-    updatePumpStatusUI(tempStatus, type.toLowerCase());
-    lastControlTime = Date.now();   
+    // Ép UI nhảy ngay lập tức cho mượt
+    let tempStatus = (cmd === '2') ? 1 : 0;
+    updatePumpStatusUI(tempStatus, type.toLowerCase()); 
 }
 
-// --- 2. SỬA HÀM CẬP NHẬT GIAO DIỆN (Logic khóa nút) ---
+// Cập nhật trạng thái từng nút bấm độc lập
 function updatePumpStatusUI(status, type) {
     const statusText = document.getElementById(`${type}-status`);
     const btnOn = document.getElementById(`btn-${type}-on`);
@@ -273,140 +228,21 @@ function updatePumpStatusUI(status, type) {
     
     if (!statusText || !btnOn || !btnOff) return;
 
-    // 1. CẬP NHẬT GIAO DIỆN CHỮ (Áp dụng cho mọi chế độ)
     if (status == 1) {
-        statusText.innerHTML = `Trạng thái: <strong style="color:green">ĐANG CHẠY...</strong> <i class="fas fa-spinner fa-spin"></i>`;
+        statusText.innerHTML = `Trạng thái: <strong style="color:green">ĐANG CHẠY...</strong>`;
         statusText.style.color = "green";
     } else {
         statusText.innerHTML = `Trạng thái: <strong>Đang Tắt</strong>`;
         statusText.style.color = "#7f8c8d";
     }
 
-    // 2. XỬ LÝ KHÓA/MỞ NÚT (Chỉ áp dụng cho chế độ MANUAL)
     if (currentMode === 'MANUAL') {
         if (status == 1) {
-            // Đang Bật -> Khóa nút Bật, Mở nút Tắt
-            btnOn.disabled = true;
-            btnOn.style.opacity = "0.5";
-            btnOn.style.cursor = "not-allowed";
-
-            btnOff.disabled = false;
-            btnOff.style.opacity = "1";
-            btnOff.style.cursor = "pointer";
+            btnOn.disabled = true; btnOn.style.opacity = "0.5"; btnOn.style.cursor = "not-allowed";
+            btnOff.disabled = false; btnOff.style.opacity = "1"; btnOff.style.cursor = "pointer";
         } else {
-            // Đang Tắt -> Mở nút Bật, Khóa nút Tắt
-            btnOn.disabled = false;
-            btnOn.style.opacity = "1";
-            btnOn.style.cursor = "pointer";
-
-            btnOff.disabled = true;
-            btnOff.style.opacity = "0.5";
-            btnOff.style.cursor = "not-allowed";
+            btnOn.disabled = false; btnOn.style.opacity = "1"; btnOn.style.cursor = "pointer";
+            btnOff.disabled = true; btnOff.style.opacity = "0.5"; btnOff.style.cursor = "not-allowed";
         }
     } 
 }
-function updateText(id, text) {
-    const el = document.getElementById(id);
-    if (el) {
-        el.innerText = text;
-    }
-}
-// 1. Lắng nghe sự kiện từ Server
-socket.on('system_alert', (data) => {
-    showSystemAlert(data.level, data.message);
-});
-
-// 2. Hàm hiển thị thông báo lên màn hình
-function showSystemAlert(level, message) {
-    // Tìm thẻ div cảnh báo
-    let alertBox = document.getElementById('system-alert-box');
-    
-    // Nếu chưa có thẻ div này trong HTML thì tạo mới (Phòng trường hợp quên viết trong HTML)
-    if (!alertBox) {
-        alertBox = document.createElement('div');
-        alertBox.id = 'system-alert-box';
-        document.body.appendChild(alertBox);
-    }
-
-    // Xác định màu sắc dựa trên level (success, warning, danger)
-    let colorClass = 'alert-info'; // Mặc định màu xanh dương
-    let icon = '<i class="fas fa-info-circle"></i>';
-
-    if (level === 'success') {
-        colorClass = 'alert-success'; // Xanh lá
-        icon = '<i class="fas fa-check-circle"></i>';
-    } else if (level === 'warning') {
-        colorClass = 'alert-warning'; // Vàng
-        icon = '<i class="fas fa-exclamation-triangle"></i>';
-    } else if (level === 'danger') {
-        colorClass = 'alert-danger'; // Đỏ
-        icon = '<i class="fas fa-fire"></i>';
-    }
-
-    // Nội dung HTML của hộp thoại
-    alertBox.className = `alert ${colorClass} shadow-lg`; // Bootstrap classes
-    alertBox.style.zIndex = "9999"; // Đảm bảo nổi lên trên cùng
-    
-    alertBox.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <strong style="font-size: 1.2em; margin-right: 10px;">${icon} THÔNG BÁO HỆ THỐNG:</strong>
-                <br>
-                <span style="font-size: 1.1em;">${message}</span>
-            </div>
-            <button type="button" class="btn-close" onclick="document.getElementById('system-alert-box').style.display='none'"></button>
-        </div>
-    `;
-
-    // Hiện hộp thoại
-    alertBox.style.display = 'block';
-
-    // Tự động tắt sau 5 giây
-    if (window.alertTimeout) clearTimeout(window.alertTimeout);
-    window.alertTimeout = setTimeout(() => {
-        alertBox.style.display = 'none';
-    }, 7000); // 7 giây cho người dùng kịp đọc
-}
-// ==========================================================
-// [MỚI] CẬP NHẬT DỮ LIỆU HIỆU QUẢ (EFFICIENCY)
-// ==========================================================
-socket.on('efficiency_data', (data) => {
-    // 1. Cập nhật số kWh tăng thêm
-    const kwhElem = document.getElementById('eff-gain-kwh');
-    if (kwhElem) {
-        let sign = data.x_today_kwh >= 0 ? '+' : '';
-        kwhElem.innerHTML = `${sign}${data.x_today_kwh} <span style="font-size:0.6em">kWh</span>`;
-    }
-
-    // 2. Cập nhật tiền tiết kiệm
-    const vndElem = document.getElementById('eff-save-vnd');
-    if (vndElem) {
-        // Format số tiền (ví dụ: 1,200 đ)
-        let money = new Intl.NumberFormat('vi-VN').format(data.y_today_vnd);
-        vndElem.innerText = `${money} đ`;
-    }
-
-    // 3. Cập nhật % tăng trưởng tháng
-    const percentElem = document.getElementById('eff-percent-month');
-    const progressElem = document.getElementById('eff-progress-bar');
-    
-    if (percentElem && progressElem) {
-        let p = data.z_month_percent;
-        percentElem.innerText = `+${p}%`;
-        
-        // Giới hạn thanh progress max 100% để không bị vỡ giao diện
-        let width = p * 5; // Nhân 5 để dễ nhìn (ví dụ tăng 5% thì thanh dài 25%)
-        if (width > 100) width = 100;
-        progressElem.style.width = `${width}%`;
-    }
-});
-
-// Khi load trang, lấy giá điện hiện tại để hiển thị
-fetch('/api/get_params')
-    .then(r => r.json())
-    .then(data => {
-        // Cập nhật giá điện vào phần chú thích (tính toán dựa trên alpha_p và bảng giá trong backend)
-        // Vì API get_params hiện tại chưa trả về giá tiền cụ thể (chỉ trả kWh), 
-        // bạn có thể cập nhật API hoặc tạm để trống. 
-        // Tuy nhiên, logic backend đã dùng đúng giá điện để tính ra VND rồi.
-    });

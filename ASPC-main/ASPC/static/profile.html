@@ -33,6 +33,9 @@
         .btn-upload:hover { background: #2563eb; transform: scale(1.1); }
         .form-control { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 15px; }
         .form-control:focus { border-color: #3b82f6; box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25); }
+        .tier-box { border: 2px solid #e2e8f0; border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: 0.2s; }
+        .tier-box:hover { transform: translateY(-5px); box-shadow: 0 10px 15px rgba(0,0,0,0.1); }
+        .tier-box.active-tier { border-color: #3b82f6; background-color: #eff6ff; }
     </style>
 </head>
 <body>
@@ -40,11 +43,27 @@
     <!-- SIDEBAR CHUẨN -->
     <nav id="sidebar">
         <div class="sidebar-header"><h3 class="logo-text fw-bold m-0"><i class="fas fa-solar-panel text-primary"></i> ASPC</h3></div>
-        <ul class="list-unstyled components">
+                <ul class="list-unstyled components">
             <li><a href="index.html"><i class="fas fa-th-large"></i> <span>Tổng Quan</span></a></li>
-            <li><a href="weather.html"><i class="fas fa-cloud-sun-rain"></i> <span>Dự Báo Thời Tiết</span></a></li>
-            <li><a href="health.html"><i class="fas fa-heartbeat"></i> <span>Sức Khỏe Pin</span></a></li>
-            <li><a href="hotspot.html"><i class="fas fa-fire"></i> <span>Điểm Nóng AI</span></a></li>
+            
+            <li>
+                <a href="weather.html"><i class="fas fa-cloud-sun-rain"></i> 
+                    <span>Dự Báo Thời Tiết {% if tier == 'FREE' %}<i class="fas fa-lock ms-2 text-danger" style="font-size:0.8rem"></i>{% endif %}</span>
+                </a>
+            </li>
+            
+            <li>
+                <a href="health.html"><i class="fas fa-heartbeat"></i> 
+                    <span>Sức Khỏe Pin {% if tier == 'FREE' %}<i class="fas fa-lock ms-2 text-danger" style="font-size:0.8rem"></i>{% endif %}</span>
+                </a>
+            </li>
+            
+            <li>
+                <a href="hotspot.html"><i class="fas fa-fire"></i> 
+                    <span>Điểm Nóng AI {% if tier != 'PREMIUM' %}<i class="fas fa-lock ms-2 text-danger" style="font-size:0.8rem"></i>{% endif %}</span>
+                </a>
+            </li>
+            
             <li><a href="history.html"><i class="fas fa-history"></i> <span>Lịch Sử Lệnh</span></a></li>
             <li><a href="parameter.html"><i class="fas fa-cog"></i> <span>Cấu Hình</span></a></li>
         </ul>
@@ -93,7 +112,15 @@
                         </div>
                         <h4 class="fw-bold text-dark" id="display-name">Đang tải...</h4>
                         <p class="text-muted" id="display-email">@email.com</p>
-                        <span class="badge bg-success-subtle text-success px-3 py-2 rounded-pill"><i class="fas fa-check-circle me-1"></i> Tài khoản Kích Hoạt</span>
+                        {% if tier == 'PREMIUM' %}
+                            <span class="badge bg-warning-subtle text-warning-emphasis px-3 py-2 rounded-pill border border-warning"><i class="fas fa-crown me-1"></i> Gói PREMIUM</span>
+                        {% elif tier == 'PRO' %}
+                            <span class="badge bg-info-subtle text-info-emphasis px-3 py-2 rounded-pill border border-info"><i class="fas fa-rocket me-1"></i> Gói PRO</span>
+                        {% else %}
+                            <span class="badge bg-secondary-subtle text-secondary px-3 py-2 rounded-pill border border-secondary"><i class="fas fa-leaf me-1"></i> Gói FREE</span>
+                        {% endif %}
+
+                        
                     </div>
                 </div>
 
@@ -107,6 +134,9 @@
                             <li class="nav-item">
                                 <button class="nav-link fw-bold border-0 bg-light rounded-3 w-100" data-bs-toggle="tab" data-bs-target="#security-tab">Bảo mật & Mật khẩu</button>
                             </li>
+                            <li class="nav-item">
+                                <button class="nav-link fw-bold border-0 bg-light rounded-3 w-100" data-bs-toggle="tab" data-bs-target="#demo-tab"><i class="fas fa-crown text-warning"></i> Quản lý Gói (Demo)</button>
+                           </li>
                         </ul>
 
                         <div class="tab-content">
@@ -135,6 +165,33 @@
                             </div>
 
                             <!-- TAB BẢO MẬT -->
+                                                         <!-- TAB DEMO CHỌN GÓI -->
+                            <div class="tab-pane fade" id="demo-tab">
+                                <h6 class="fw-bold mb-3 text-secondary">Chọn gói cước để Demo giao diện:</h6>
+                                <p class="text-muted small mb-4">Gói hiện tại của bạn: <strong class="text-primary fs-5">{{ tier }}</strong></p>
+                                
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <div class="tier-box {% if tier == 'FREE' %}active-tier{% endif %}" onclick="changeTier('FREE')">
+                                            <h4 class="fw-bold text-secondary">FREE</h4>
+                                            <p class="small text-muted mb-0">Chỉ xem Dashboard</p>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="tier-box {% if tier == 'PRO' %}active-tier{% endif %}" onclick="changeTier('PRO')">
+                                            <h4 class="fw-bold text-info">PRO</h4>
+                                            <p class="small text-muted mb-0">Sức khỏe + Thời tiết</p>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="tier-box {% if tier == 'PREMIUM' %}active-tier{% endif %}" onclick="changeTier('PREMIUM')">
+                                            <h4 class="fw-bold text-warning">PREMIUM</h4>
+                                            <p class="small text-muted mb-0">Mở khóa Computer Vision</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div class="tab-pane fade" id="security-tab">
                                 <div class="alert alert-warning border-0 bg-warning-subtle text-warning-emphasis fw-medium mb-4">
                                     <i class="fas fa-shield-alt me-2"></i> LƯU Ý: Vì lý do bảo mật, bạn chỉ có thể thay đổi mật khẩu <b>1 lần sau mỗi 30 ngày</b>.
@@ -274,6 +331,14 @@
             setTimeout(() => alertBox.innerHTML = '', 5000);
             btn.disabled = false;
         });
+        async function changeTier(newTier) {
+            if(!confirm(`Xác nhận chuyển tài khoản sang gói ${newTier}?`)) return;
+            const res = await fetch('/api/profile/update_tier', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({tier: newTier})
+            });
+            if(res.ok) window.location.reload();
+        }
     </script>
 </body>
 </html>

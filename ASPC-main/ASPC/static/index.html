@@ -277,8 +277,8 @@
                 <div class="col-lg-8">
                     <div class="panel-box">
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="panel-title m-0"><i class="fas fa-chart-area"></i> Dự Báo Nhiệt Độ AI (5 phút tới)</h5>
-                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle" id="temp-rate">-- °C/5p</span>
+                            <h5 class="panel-title m-0"><i class="fas fa-chart-area"></i> Dự Báo Nhiệt Độ AI (15 phút tới)</h5>
+                            <span class="badge bg-primary bg-opacity-10 text-primary border border-primary-subtle" id="temp-rate">-- °C/15p</span>
                         </div>
                         <div style="height: 350px;">
                             <canvas id="temperatureChart"></canvas>
@@ -294,6 +294,7 @@
                         <!-- Chọn Chế độ -->
                         <p class="text-muted small fw-bold mb-2">CHẾ ĐỘ HOẠT ĐỘNG</p>
                         <div class="mode-selector">
+
                             <div class="mode-btn">
                                 <input type="radio" name="sys_mode" id="mode_manual" value="MANUAL" checked>
                                 <label for="mode_manual"><i class="fas fa-hand-pointer"></i> Thủ công</label>
@@ -302,26 +303,75 @@
                                 <input type="radio" name="sys_mode" id="mode_auto" value="AUTO">
                                 <label for="mode_auto"><i class="fas fa-robot"></i> Auto</label>
                             </div>
+
+
                             <div class="mode-btn">
-                                <input type="radio" name="sys_mode" id="mode_smart" value="SMART_ECO">
-                                <label for="mode_smart"><i class="fas fa-brain text-purple"></i> Smart Eco</label>
+                                <input type="radio" name="sys_mode" id="mode_smart" value="SMART_ECO" {% if tier == 'FREE' %}disabled{% endif %}>
+                                <label for="mode_smart">
+                                  <i class="fas fa-brain text-purple"></i> Smart Eco
+                                    {% if tier == 'FREE' %}<i class="fas fa-lock text-danger ms-1" title="Yêu cầu gói PRO"></i>{% endif %}
+                                </label>
+                            </div>
+
+
+                        </div>
+
+                                           
+
+                    <!-- [THÊM MỚI] 2 Ô TRẠNG THÁI LÀM MÁT / LÀM SẠCH -->
+                    <div class="row g-2 mb-3 mt-3">
+                        <div class="col-6">
+                            <div id="status-cooling" class="p-2 border rounded text-center bg-light text-muted" style="transition: all 0.3s ease;">
+                                <i class="fas fa-snowflake fs-4 mb-1" id="icon-cooling"></i>
+                                <h6 class="m-0 mt-1" style="font-size: 0.8rem; font-weight: 700; letter-spacing: 0.5px;">LÀM MÁT</h6>
                             </div>
                         </div>
+                        <div class="col-6">
+                            <div id="status-cleaning" class="p-2 border rounded text-center bg-light text-muted" style="transition: all 0.3s ease;">
+                                <i class="fas fa-shower fs-4 mb-1" id="icon-cleaning"></i>
+                                <h6 class="m-0 mt-1" style="font-size: 0.8rem; font-weight: 700; letter-spacing: 0.5px;">LÀM SẠCH</h6>
+                            </div>
+                        </div>
+                        <div class="col-12 mt-1 text-center">
+                            <small id="pump-reason-text" class="text-secondary fst-italic" style="font-size: 0.75rem;">
+                                <i class="fas fa-info-circle me-1"></i> Trạng thái chờ
+                            </small>
+                        </div>
+                    </div>
+                    <!-- [KẾT THÚC THÊM MỚI] -->
+
+
+
+                    <!-- ... (Khu vực công tắc gạt ON/OFF) ... -->
                         <p id="mode-desc" class="small text-secondary mb-4 text-center">Bạn toàn quyền kiểm soát thiết bị.</p>
 
-                        <hr class="text-black-50 mb-4">
+                                                <hr class="text-black-50 mb-3">
 
-                        <!-- Trạng thái & Nút bơm mát -->
+                        <!-- 1. Bơm LÀM MÁT (Phun sương) -->
                         <div class="d-flex justify-content-between align-items-end mb-2">
-                            <span class="fw-bold text-dark">Hệ thống Phun Nước</span>
+                            <span class="fw-bold text-dark"><i class="fas fa-snowflake text-primary"></i> Phun Sương Làm Mát</span>
                             <span id="cool-status" class="status-badge status-stopped">Đang Tắt</span>
                         </div>
                         <div class="row g-2 mb-3">
                             <div class="col-6">
-                                <button id="btn-cool-on" class="control-btn btn-on"><i class="fas fa-play"></i> BẬT BƠM</button>
+                                <button id="btn-cool-on" class="control-btn btn-on"><i class="fas fa-play"></i> BẬT</button>
                             </div>
                             <div class="col-6">
-                                <button id="stop-cool-btn" class="control-btn btn-off" disabled><i class="fas fa-stop"></i> TẮT BƠM</button>
+                                <button id="stop-cool-btn" class="control-btn btn-off" disabled><i class="fas fa-stop"></i> TẮT</button>
+                            </div>
+                        </div>
+
+                        <!-- 2. B��m LÀM SẠCH (Áp lực cao) -->
+                        <div class="d-flex justify-content-between align-items-end mb-2 mt-4">
+                            <span class="fw-bold text-dark"><i class="fas fa-shower text-info"></i> Xịt Rửa Làm Sạch</span>
+                            <span id="clean-status" class="status-badge status-stopped">Đang Tắt</span>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <button id="btn-clean-on" class="control-btn btn-on" style="background:#0dcaf0;"><i class="fas fa-play"></i> BẬT</button>
+                            </div>
+                            <div class="col-6">
+                                <button id="stop-clean-btn" class="control-btn btn-off" disabled><i class="fas fa-stop"></i> TẮT</button>
                             </div>
                         </div>
 
@@ -332,9 +382,9 @@
         </div> <!-- End container -->
     </div> <!-- End content -->
 
-    <!-- ============================================== -->
+   
     <!-- SCRIPT TƯƠNG TÁC (Tách riêng UI và Logic)      -->
-    <!-- ============================================== -->
+    
     <script>
         // 1. Logic Giao diện (Sidebar & Trạm)
         document.getElementById('sidebarCollapse').addEventListener('click', function () {

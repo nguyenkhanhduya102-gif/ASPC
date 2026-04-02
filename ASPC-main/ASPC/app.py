@@ -1,4 +1,5 @@
 # ASPC - PROJECT
+# ASPC_new sẽ loại bỏ cảm biến nhiệt bề mặt - thay vào đó tập trung vào nhiệt độ môi trường và ánh sáng để dự báo, nhằm tăng độ ổn định và giảm lỗi cảm biến.
 import json
 import sqlite3
 import datetime
@@ -456,10 +457,16 @@ def save_history(user, cmd, action_type, source):
 # Hàng đợi để lưu 5 giá trị nhiệt độ gần nhất
 temp_history = deque(maxlen=5)
 
+
+
+
+
+
 # xuất báo cáo theo tháng
 def get_monthly_report(year, month):
     try:
         with app.app_context():
+            # 1. Tính tổng tiền và điện
             econ_result = db.session.query(
                 func.sum(SensorData.profit), 
                 func.sum(SensorData.delta_e)
@@ -468,6 +475,7 @@ def get_monthly_report(year, month):
                 extract('month', SensorData.timestamp) == month
             ).first()
 
+            # 2. Tính trung bình sức khỏe và tổng số bản ghi
             health_result = db.session.query(
                 func.avg(SensorData.health_score), 
                 func.count(SensorData.id)
@@ -475,6 +483,13 @@ def get_monthly_report(year, month):
                 extract('year', SensorData.timestamp) == year,
                 extract('month', SensorData.timestamp) == month
             ).first()
+
+            # 3. ĐẾM SỐ BẢN GHI TỐT (Sức khỏe >= 80%) [ĐÃ XÓA GIẢ LẬP]
+            good_records = db.session.query(func.count(SensorData.id)).filter(
+                extract('year', SensorData.timestamp) == year,
+                extract('month', SensorData.timestamp) == month,
+                SensorData.health_score >= 80.0
+            ).scalar() or 0
 
             total_profit = econ_result[0] or 0 if econ_result else 0
             total_energy_saved = econ_result[1] or 0 if econ_result else 0
@@ -490,13 +505,19 @@ def get_monthly_report(year, month):
                 "health": {
                     "avg_health_score": round(avg_health, 2),
                     "total_records": total_records,
-                    "good_days": 0,
-                    "bad_days": total_records
+                    "good_days": good_records, # Hiển thị số mẫu Tốt thực tế
+                    "bad_days": total_records - good_records # Hiển thị số mẫu Xấu thực tế
                 }
             }
     except Exception as e:
         print(f"Lỗi xuất báo cáo: {e}")
         return {"error": str(e)}
+
+
+
+
+
+
 
 
 
@@ -543,46 +564,55 @@ def should_skip_cooling_due_to_rain(pred_temp=None):
 
 
 
-#Cảnh báo sụt áp
-def check_protection_alerts(temp_panel, temp_env, humidity, lux, power, pump_status, current=None, voltage=None):
-    """Kiểm tra các cảnh báo bảo vệ và gửi alert nếu cần"""
+# Cảnh báo bảo vệ vật lý tự động nội suy
+def check_protection_alerts(temp_panel, temp_env, humidity, lux, p_actual, pump_status, current=None, voltage=None):
+    """Kiểm tra các cảnh báo bảo vệ vật lý và gửi alert qua Socket.IO"""
     alerts = []
     
-    # 1. INSULATION CHECK (quá dòng)
-    if current is not None and power > 0:
-        current_threshold = ALERT_THRESHOLDS["current_overload"] * (power / voltage if voltage else 1)  # Ước lượng current từ power
-        if current > current_threshold:
-            alerts.append({
-                "level": "CRITICAL",
-                "message": f"⚡ Nguy hiểm cách điện! Dòng điện quá cao ({current:.2f}A > {current_threshold:.2f}A). Kiểm tra cách điện tấm pin.",
-                "type": "insulation"
-            })
-    
-    # 2. VOLTAGE DROP (sụt điện áp)
-    if voltage is not None and voltage < ALERT_THRESHOLDS["voltage_min"]:
-        alerts.append({
-            "level": "WARNING",
-            "message": f"📉 Sụt điện áp ({voltage:.1f}V < {ALERT_THRESHOLDS['voltage_min']}V). Kiểm tra dây dẫn và kết nối.",
-            "type": "voltage_drop"
-        })
-    
-    # 3. HARDWARE FAILURE (chập nước)
-    if humidity > ALERT_THRESHOLDS["humidity_max"] and temp_panel < temp_env:
+    # Lấy Pmax từ cấu hình
+    mac_address = "ESP32_DEFAULT" 
+    health_brain = get_engines(mac_address)["health"]
+    p_max = health_brain.p_max 
+
+    # 1. Ước lượng I_max và U_max dựa trên Pmax
+    estimated_u_max = 20.0 if p_max <= 200 else 50.0 
+    estimated_i_max = p_max / estimated_u_max * 1.5 # Nhân hệ số an toàn 1.5 lần
+
+    # 2. KIỂM TRA QUÁ DÒNG / NGẮN MẠCH
+    if current is not None and current > estimated_i_max:
         alerts.append({
             "level": "CRITICAL",
-            "message": f"💧 Nguy hiểm chập nước! Độ ẩm cao ({humidity:.1f}%) và tấm pin lạnh hơn môi trường. Ngừng hoạt động ngay.",
-            "type": "hardware_failure"
+            "type": "insulation",
+            "message": f"⚡ CẢNH BÁO: Dòng điện cao bất thường ({current}A). Nguy cơ ngắn mạch!"
         })
-    
-    # 4. SENSOR MALFUNCTION (cảm biến Lux lỗi)
-    if lux > ALERT_THRESHOLDS["lux_max"]:
+
+    # 3. KIỂM TRA SỤT ÁP / HỞ MẠCH
+    if lux > 50000 and voltage is not None and voltage < 5.0:
         alerts.append({
-            "level": "WARNING",
-            "message": f"📡 Cảm biến Lux có thể bị lỗi ({lux} > {ALERT_THRESHOLDS['lux_max']}). Cần calibrate lại.",
-            "type": "sensor_malfunction"
+            "level": "CRITICAL",
+            "type": "voltage_drop",
+            "message": f"📉 CẢNH BÁO: Sụt áp nghiêm trọng ({voltage}V) khi trời nắng. Kiểm tra rắc cắm MC4!"
         })
-    
-    # Gửi alert qua Socket.IO nếu có
+
+    # 4. KIỂM TRA LỖI CẢM BIẾN U, I, P
+    if voltage is not None and current is not None and lux > 10000:
+        p_calc = voltage * current
+        if p_actual > 0 and abs(p_calc - p_actual) / p_actual > 0.2:
+            alerts.append({
+                "level": "WARNING",
+                "type": "sensor_malfunction",
+                "message": "📡 CẢNH BÁO: Dữ liệu P, U, I không khớp. Cảm biến có thể bị lỗi!"
+            })
+
+    # 5. KIỂM TRA CHẬP NƯỚC KHI BƠM
+    if pump_status == 1 and humidity > 95 and current is not None and current > (estimated_i_max * 0.8):
+        alerts.append({
+            "level": "CRITICAL",
+            "type": "hardware_failure",
+            "message": "💧 CẢNH BÁO: Độ ẩm quá cao khi đang bơm. Nguy cơ chập nước!"
+        })
+
+    # Gửi tất cả các alert qua Socket.IO nếu có
     for alert in alerts:
         socketio.emit('system_alert', alert)
         print(f"ALERT: {alert['level']} - {alert['message']}")
@@ -606,7 +636,7 @@ def check_system_decision(mac_address,temp_panel , lux ,p_max, pump_status):
 
     # 1. Dự báo nhiệt độ cơ bản (cho Auto/Manual cũ)
     ai_result = ai_brain.predict()
-    pred_temp_basic = ai_result['pred_temp_5min'] if ai_result else temp_panel
+    pred_temp_basic = ai_result['pred_temp_15min'] if ai_result else temp_panel
 
     
     # CHẾ ĐỘ 1: SMART ECO (TỐI ƯU KINH TẾ & AN TOÀN)
@@ -666,19 +696,18 @@ def check_system_decision(mac_address,temp_panel , lux ,p_max, pump_status):
                         print(f"💰 SMART: Tắt bơm. {reason}")
                         mqtt_client.publish(TOPIC_PUB, json.dumps({"command": "0", "type": "COOL", "source": "SMART_ECO"}))
                         system_state["is_auto_running"] = False
-                        socketio.emit('system_alert', {'level': 'info', 'message': f'SMART: Đã mát ({current_temp:.1f}°C). Tắt bơm tiết kiệm.'})
+                        socketio.emit('system_alert', {'level': 'info', 'message': f'SMART: Đã mát ({temp_panel:.1f}°C). Tắt bơm tiết kiệm.'})
                         save_history("SMART_ECO", "TẮT", "Tối ưu kinh tế", "SMART_ECO")
                     else:
                         # Nếu chưa đủ mát thì KHÔNG TẮT, dù đang lỗ
                         pass
         # Gửi dữ liệu kinh tế để vẽ biểu đồ (nếu cần)
         socketio.emit('economic_data', {'profit': profit, 'delta_e': delta_e, 'reason': reason})
-
-    
+   
     # CHẾ ĐỘ 2: AUTO (LOGIC CŨ - DỰA VÀO NGƯỠNG NHIỆT)
     
     elif system_state["mode"] == "AUTO":
-        # A. Logic BẬT
+        # A. Logic bật bơm 
         if pred_temp_basic >= TEMP_THRESHOLD_HIGH:
             if system_state["warning_start_time"] is None:
                 system_state["warning_start_time"] = current_time
@@ -693,13 +722,15 @@ def check_system_decision(mac_address,temp_panel , lux ,p_max, pump_status):
                         'message': f"AUTO: Dự báo sắp quá nhiệt ({pred_temp_basic:.1f}°C) nhưng sắp mưa ({rain_reason}). Tạm không phun để tiết kiệm."
                     })
                 else:
+                    
                     mqtt_client.publish(TOPIC_PUB, json.dumps({"command": "2", "type": "COOL", "source": "AI_AUTO"}))
                     system_state["is_auto_running"] = True
                     system_state["last_auto_start"] = current_time
                     save_history("AI_AUTO", "BẬT", "Quá nhiệt", "AUTO")
                     socketio.emit('system_alert', {'level': 'danger', 'message': 'AUTO: Đã bật bơm bảo vệ!'})
 
-        # B. Logic TẮT
+# B. Logic TẮT
+
         elif system_state["is_auto_running"]:
             run_duration = current_time - system_state["last_auto_start"]
             if temp_panel < TEMP_THRESHOLD_SAFE and run_duration > MIN_RUN_TIME:
@@ -739,6 +770,41 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe(TOPIC_SUB)
 
 
+# [THÊM MỚI] Hàm tính Nhiệt độ Ảo từ Công suất (Công thức NREL)
+def calculate_virtual_temp(p_actual_W, lux, p_max, alpha_p, temp_env):
+    """
+    Tính nhiệt độ ảo T_cell dựa trên công thức NREL:
+    P_dc = (I_tr / 1000) * P_dc0 * [1 + gamma * (T_cell - 25)]
+    """
+    # 1. Bỏ qua nếu trời quá tối hoặc thông số sai (để tránh chia cho 0)
+    if lux < 2000 or p_max <= 0 or alpha_p == 0:
+        return temp_env # Trả về bằng môi trường nếu không đủ sáng
+
+    # 2. Quy đổi Lux sang Bức xạ W/m2 (Hệ số quy đổi trung bình là ~116)
+    g_w_m2 = lux / 116.0
+
+    # 3. Tính Công suất lý thuyết ở điều kiện STC (25 độ C)
+    p_theory_stc = (g_w_m2 / 1000.0) * p_max
+    
+    if p_theory_stc <= 0: return temp_env
+
+    # 4. Xử lý hệ số Gamma (Đảm bảo nó luôn âm để đảo dấu công thức đúng)
+    # Ví dụ alpha_p là 0.4% thì ta dùng -0.004
+    gamma = -abs(alpha_p) 
+    
+    # 5. Giải phương trình tìm T_cell:
+    # T_cell = 25 + (1 / gamma) * ((P_actual / P_theory_stc) - 1)
+    ratio = p_actual_W / p_theory_stc
+    
+    t_virtual = 25.0 + (1.0 / gamma) * (ratio - 1.0)
+    
+    # 6. Giới hạn vật lý (Lọc nhiễu nếu dữ liệu Inverter trả về ảo)
+    if t_virtual < temp_env - 5.0: t_virtual = temp_env - 5.0 # Khó có chuyện lạnh hơn môi trường quá 5 độ
+    if t_virtual > 90.0: t_virtual = 90.0
+    
+    return t_virtual
+
+
 def on_message(client, userdata, msg):
     global system_state
     try:
@@ -763,10 +829,12 @@ def on_message(client, userdata, msg):
         voltage = data.get("voltage", None)  # V (điện áp)
 
 
+
+
+
         # 1. ÉP KIỂU DỮ LIỆU AN TOÀN (Tránh lỗi String/None)
         # Xử lý Nhiệt độ (Có lọc nhiễu)
-        raw_temp_panel = float(data.get('temp_panel', 0) or 0)
-        temp_panel = get_smooth_temp(raw_temp_panel) # Dùng giá trị đã làm mượt
+        
         
         temp_env = float(data.get('temp_env', 0) or 0)
         humidity = float(data.get('humidity', 0) or 0)
@@ -775,15 +843,19 @@ def on_message(client, userdata, msg):
         p_actual_W = float(data.get('power', 0) or 0)
 
 
-        
-
+       
 
         # Xử lý Trạng thái bơm (Quan trọng: Chấp nhận cả 1, "1", "true", "ON")
         raw_pump = data.get('pump_status', 0)
         pump_status = 1 if str(raw_pump).upper() in ['1', 'TRUE', 'ON'] else 0
         
+# [MỚI] TÍNH TOÁN NHIỆT ĐỘ ẢO (VIRTUAL SENSOR) THAY VÌ ĐỌC TỪ CẢM BIẾN
+        p_max_current = health_brain.p_max
+        alpha_p = optimizer_brain.alpha_p
 
+        calc_t = calculate_virtual_temp(p_actual_W, lux, p_max_current, alpha_p, temp_env)
 
+        temp_panel = get_smooth_temp(calc_t)
         #chèn thêm
         check_protection_alerts(temp_panel, temp_env, humidity, lux, p_actual_W, pump_status, current, voltage)
 
@@ -890,6 +962,44 @@ def on_message(client, userdata, msg):
             hotspot_type = "core_fault"
 
         dust_level = hotspot_result.get('risk_percent', 0) if hotspot_type == "dust" else 0
+
+
+        
+        #  DỊCH TRẠNG THÁI BƠM (DỮ LIỆU THẬT)
+        pump_mode = "IDLE"
+        pump_reason = "Đang chờ"
+        
+        if pump_status == 1:
+            if system_state["mode"] == "MANUAL":
+                # Đọc lại xem người dùng vừa bấm nút nào
+                manual_type = system_state.get('last_manual_type', 'COOL')
+                if manual_type == 'CLEAN':
+                    pump_mode = "CLEANING"
+                    pump_reason = "Người dùng bật Làm Sạch"
+                else:
+                    pump_mode = "COOLING"
+                    pump_reason = "Người dùng bật Làm Mát"
+                    
+            elif hotspot_result['status'] == 'DANGER':
+                pump_mode = "COOLING"
+                pump_reason = "Phun làm mát khẩn cấp (Hotspot)"
+                
+            # Logic Tự Động / Smart: Ưu tiên Làm Sạch nếu phát hiện rác/bụi/phân chim
+            elif health_score < 85 and lux > 20000 and temp_panel < 50.0:
+                pump_mode = "CLEANING"
+                pump_reason = "Rửa trôi bề mặt (Bụi/Phân chim)"
+                
+            # Nếu không có rác, mà bơm vẫn chạy -> Chắc chắn là đang Làm mát
+            else:
+                pump_mode = "COOLING"
+                pump_reason = "Tối ưu nhiệt độ (AI)"
+        else:
+            if system_state["mode"] == "MANUAL":
+                pump_mode = "IDLE"
+                pump_reason = "Đã tắt (Thủ công)"
+            else:
+                pump_mode = "IDLE"
+                pump_reason = "Hệ thống tối ưu"
         # 3. Gửi dữ liệu ra Web
         socketio.emit('sensor_data', {
             'temp_panel': round(temp_panel,2),
@@ -901,6 +1011,8 @@ def on_message(client, userdata, msg):
             'p_theory': round(p_theory_val, 2),
             'g_meas': round(g_meas, 2),             # Gửi thêm Bức xạ tính toán để hiển thị nếu cần
             'pump_status': pump_status,
+            'pump_mode': pump_mode,      
+            'pump_reason': pump_reason, 
 
             'hotspot_risk': hotspot_result['risk_percent'],
             'hotspot_status': hotspot_result['status'],
@@ -921,6 +1033,15 @@ def on_message(client, userdata, msg):
             system_state["is_auto_running"] = True
             system_state["last_auto_start"] = time.time()
 
+
+
+
+
+
+
+
+
+
             socketio.emit('system_alert', {
                 'level': 'CRITICAL',
                 'message': f"🚨 AI phát hiện HOTSPOT nguy hiểm. Tự động bật phun làm mát. Lý do: {hotspot_result['reason']}"
@@ -937,7 +1058,7 @@ if MQTT_USERNAME: mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
 mqtt_client.tls_set(tls_version=ssl.PROTOCOL_TLS)
 mqtt_client.on_connect = on_connect
 mqtt_client.on_message = on_message
-
+#hàm gọi vad chạy giao thức MQTT
 def run_mqtt():
     try:
         mqtt_client.connect(BROKER, PORT, 60)
@@ -948,36 +1069,55 @@ def run_mqtt():
 
 
 
-# KHỐI LOGIC: XỬ LÝ VIDEO CAMERA AI
 
 
-# Lấy đường dẫn tuyệt đối của thư mục đang chứa file app.py
+
+
+# KHỐI LOGIC: XỬ LÝ VIDEO CAMERA AI 
+
+
+# 1. CẤU HÌNH NGUỒN CAMERA THÔNG MINH
+# Nếu trong file .env có CAMERA_URL (VD: rtsp://admin:pass@192.168.1.10:554/1), nó sẽ dùng Camera thật.
+# Nếu bỏ trống, hệ thống tự động fallback về video Demo.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-VIDEO_SOURCE = os.path.join(BASE_DIR, "demo_solar.mp4")
+env_camera_url = os.getenv("CAMERA_URL", "").strip()
+
+if env_camera_url:
+    VIDEO_SOURCE = env_camera_url
+    print(f"📷 [VISION AI] Đã kết nối luồng Camera thực tế: {VIDEO_SOURCE}")
+else:
+    VIDEO_SOURCE = os.path.join(BASE_DIR, "demo_solar.mp4")
+    print(f"🎬 [VISION AI] Đang chạy chế độ Demo Video: {VIDEO_SOURCE}")
 
 def generate_video_frames():
     """Hàm tạo luồng hình ảnh liên tục cho Camera AI trên Web"""
     cap = cv2.VideoCapture(VIDEO_SOURCE)
     
-    # Nếu không mở được video, trả về một ảnh đen báo lỗi
+    # Nếu không mở được video, trả về ảnh đen báo lỗi
     if not cap.isOpened():
         error_img = np.zeros((480, 854, 3), dtype=np.uint8)
-        cv2.putText(error_img, f"ERROR: CANNOT LOAD '{VIDEO_SOURCE}'", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        cv2.putText(error_img, f"ERROR: CANNOT LOAD CAMERA STREAM", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
         ret, buffer = cv2.imencode('.jpg', error_img)
         frame_bytes = buffer.tobytes()
         yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        time.sleep(0.05)
         return
     
-
     frame_count = 0
+    last_alert_time = 0  # Biến chống spam cảnh báo
+    ALERT_COOLDOWN = 60  # Thời gian chờ giữa 2 lần báo động (60 giây)
 
     while True:
         success, frame = cap.read()
         if not success:
-            # Hết video thì tua lại từ đầu
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            continue
+            # Nếu là camera IP thật bị rớt mạng -> Cố gắng kết nối lại
+            if env_camera_url:
+                time.sleep(0.1)
+                cap = cv2.VideoCapture(VIDEO_SOURCE)
+                continue
+            else:
+                # Nếu là video demo hết -> Tua lại từ đầu
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                continue
             
         frame_count += 1
         
@@ -987,34 +1127,41 @@ def generate_video_frames():
 
         warning_active = False
 
-        # --- Thuật toán lọc màu sáng (Phân chim/Bụi) ---
+        # --- Thuật toán lọc đốm bẩn / phân chim ---
         hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         lower_white = np.array([0, 0, 160])    
         upper_white = np.array([180, 50, 255]) 
         mask = cv2.inRange(hsv_frame, lower_white, upper_white)
 
-        # Xóa nhiễu
         kernel = np.ones((5,5), np.uint8)
         mask_clean = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
 
-        # Tìm các đốm trắng
         contours, _ = cv2.findContours(mask_clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         for contour in contours:
             area = cv2.contourArea(contour)
-            # Chỉ bắt đốm to vừa phải
             if 50 < area < 2000:
                 x, y, w, h = cv2.boundingRect(contour)
                 fake_prob = min(99, 75 + (int(area) % 24))
                 
-                # Vẽ khung Cam
                 cv2.rectangle(annotated_frame, (x, y), (x + w, y + h), (0, 165, 255), 2)
                 
-                # Vẽ text cho đốm lớn
                 if area > 300:
                     cv2.putText(annotated_frame, f"Bird Drop {fake_prob}%", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 165, 255), 1)
                 
                 warning_active = True
+
+        # --- LOGIC PHÁT CẢNH BÁO CHO HỆ THỐNG CHÍNH ---
+        if warning_active:
+            current_time = time.time()
+            # Bắn cảnh báo xuống web nếu đã qua thời gian Cooldown (60s/lần)
+            if current_time - last_alert_time > ALERT_COOLDOWN:
+                socketio.emit('system_alert', {
+                    'level': 'WARNING',
+                    'type': 'camera_ai',
+                    'message': '📷 CẢNH BÁO CAMERA: AI phát hiện có vết bẩn / phân chim chặn sáng trên tấm pin!'
+                })
+                last_alert_time = current_time
 
         # --- Vẽ HUD (Giao diện Kính ngắm trên góc) ---
         overlay = annotated_frame.copy()
@@ -1037,6 +1184,11 @@ def generate_video_frames():
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
 # ==========================================
+
+
+
+
+
 
 @app.route('/video_feed')
 def video_feed():
@@ -1171,6 +1323,7 @@ def login_page():
             session['user_id'] = user.id
             session['username'] = user.username
             session['avatar'] = user.avatar or ""
+            session['tier'] = user.tier
             return redirect(url_for('dashboard'))
         else:
             flash("Tên đăng nhập hoặc mật khẩu không chính xác!", "danger")
@@ -1214,47 +1367,42 @@ def logout():
 def home(): 
     return render_template('home_page.html')
 
+
+
 @app.route('/index.html')
 @login_required 
 def dashboard(): 
-    avatar = session.get('avatar', '') # Lấy tên ảnh từ Session
-    return render_template('index.html', avatar=avatar)
-
+    return render_template('index.html', avatar=session.get('avatar', ''), tier=session.get('tier', 'FREE'))
+    
 @app.route('/health.html')
 @login_required
 def health(): 
-    avatar = session.get('avatar', '')
-    return render_template('health.html', avatar=avatar)
+    return render_template('health.html', avatar=session.get('avatar', ''), tier=session.get('tier', 'FREE'))
 
 @app.route('/history.html')
 @login_required
 def history(): 
-    avatar = session.get('avatar', '')
-    return render_template('history.html', avatar=avatar)
+    return render_template('history.html', avatar=session.get('avatar', ''), tier=session.get('tier', 'FREE'))
 
 @app.route('/parameter.html')
 @login_required
 def parameter(): 
-    avatar = session.get('avatar', '')
-    return render_template('parameter.html', avatar=avatar)
+    return render_template('parameter.html', avatar=session.get('avatar', ''), tier=session.get('tier', 'FREE'))
 
 @app.route('/hotspot.html')
 @login_required
 def hotspot_page(): 
-    avatar = session.get('avatar', '')
-    return render_template('hotspot.html', avatar=avatar)
+    return render_template('hotspot.html', avatar=session.get('avatar', ''), tier=session.get('tier', 'FREE'))
 
 @app.route('/weather.html')
 @login_required
 def weather_page(): 
-    avatar = session.get('avatar', '')
-    return render_template('weather.html', avatar=avatar)
+    return render_template('weather.html', avatar=session.get('avatar', ''), tier=session.get('tier', 'FREE'))
 
 @app.route('/profile.html')
 @login_required
 def profile_page():
-    avatar = session.get('avatar', '')
-    return render_template('profile.html', avatar=avatar)
+    return render_template('profile.html', avatar=session.get('avatar', ''), tier=session.get('tier', 'FREE'))
 
 
 
@@ -1295,6 +1443,15 @@ def get_economic_report_api(year, month):
 
 
 # API QUẢN LÝ HỒ SƠ NGƯỜI DÙNG (PROFILE)
+@app.route('/api/profile/update_tier', methods=['POST'])
+@login_required
+def update_tier():
+    user = User.query.get(session['user_id'])
+    new_tier = request.json.get('tier', 'FREE')
+    user.tier = new_tier
+    db.session.commit()
+    session['tier'] = new_tier
+    return jsonify({"status": "success", "message": f"Đã chuyển sang gói {new_tier}"})
 
 @app.route('/api/profile/get', methods=['GET'])
 @login_required
@@ -1400,12 +1557,18 @@ def handle_control(data):
             'message': f' KHÔNG THỂ ĐIỀU KHIỂN! Hệ thống đang ở chế độ {system_state["mode"]}. Hãy chuyển sang THỦ CÔNG.'
         })
         return # Thoát hàm, không thực hiện lệnh
-
-    # 2. NẾU LÀ THỦ CÔNG -> THỰC HIỆN BÌNH THƯỜNG
+#  Ghi nhớ người dùng vừa bấm COOL hay CLEAN
+    system_state['last_manual_type'] = data.get('type', 'COOL')
+    # 2. Truyền tín hiệu bật/tắt (1/0) vào thẳng biến toàn cục cho Giả Lập đọc
+    system_state['mock_pump'] = 1 if str(data.get('command')) == '2' else 0
+    
     mqtt_client.publish(TOPIC_PUB, json.dumps(data))
     
     cmd_text = "BẬT" if str(data['command']) == '2' else "TẮT"
     save_history(data.get('user_id'), cmd_text, data.get('type'), "WEB")
+
+
+
 @app.route('/favicon.ico')
 def favicon(): return "", 204
 
@@ -1415,6 +1578,12 @@ def serve_static(filename):
         try: return render_template(filename)
         except: return "File not found", 404
     return "", 404
+
+
+
+
+
+
 
 
 
@@ -1446,13 +1615,12 @@ def run_simulation():
 
     # Biến để nhận lệnh từ App
     global_command = None
-
-    # Hàm giả lập nhận lệnh (Cần gắn vào hệ thống chính nếu cần)
-    def mock_command_receiver(cmd):
-        nonlocal global_command
-        global_command = cmd
+    
+    
 
     while True:
+        if 'mock_pump' in system_state and system_state['mode'] == 'MANUAL':
+            sim_state['pump_status'] = system_state['mock_pump']
         # 1. THỜI GIAN TRÔI (Chậm lại chút để kịp quan sát)
         virtual_hour += 0.05 
         if virtual_hour >= 24.0: virtual_hour = 0.0
@@ -1507,18 +1675,88 @@ def run_simulation():
         sim_state['temp_panel'] = current + (final_target - current) * inertia
 
         
-        # 5. TÍNH CÔNG SUẤT (Để thấy hiệu quả kinh tế)
-        sim_power = 0
+
+
+
+       
+        # 5. TÍNH CÔNG SUẤT (Tuân thủ định luật NREL để kiểm thử Nhiệt độ ảo)
+        P_max_sim = 5000.0 # Giả lập hệ thống 5kW
+        alpha_p_sim = -0.004 # Hệ số nhiệt (Gamma)
+        
         if sim_state['lux'] > 0:
-            # Hiệu suất: Cứ nóng 1 độ (trên 25) thì mất 0.5% công suất
-            loss = (sim_state['temp_panel'] - 25) * 0.005
-            eff = 1.0 - loss
-            if eff < 0.5: eff = 0.5
-            sim_power = (sim_state['lux']/1000.0) * 0.5 * eff # Công thức giả định P=50W
+            g_w_m2 = sim_state['lux'] / 116.0
+            p_theory_stc = (g_w_m2 / 1000.0) * P_max_sim
+            
+            # Tính công suất bị suy hao do nhiệt độ (Công thức thuận)
+            loss_factor = alpha_p_sim * (sim_state['temp_panel'] - 25.0)
+            sim_power = p_theory_stc * (1.0 + loss_factor)
+            
+            if sim_power < 0: sim_power = 0.0
+        else:
+            sim_power = 0.0
+        # 6. TÍNH U VÀ I (MÔ PHỎNG VẬT LÝ) ĐỂ TEST HỆ THỐNG CẢNH BÁO
+        if sim_power > 0:
+            sim_voltage = 45.0 + random.uniform(-1.0, 1.0) # Áp giả định 45V
+            sim_current = sim_power / sim_voltage
+        else:
+            sim_voltage = 0.0
+            sim_current = 0.0
+# BẮT ĐẦU CHÈN THÊM ĐỂ WEB HIỂN THỊ ĐỦ THÔNG SỐ
+       
+
+        # 1. Bơm dữ liệu AI dự báo (Tạo cái đuôi nét đứt trên biểu đồ)
+        mock_pred_temp = sim_state['temp_panel'] + (target_temp_dry - sim_state['temp_panel']) * 0.2
+        socketio.emit('ai_data', {'ai': {'pred_temp_15min': round(mock_pred_temp, 2)}})
+
+              
+        # LOGIC XÁC ĐỊNH BƠM THEO CHẾ ĐỘ THỰC TẾ
+        
+        pump_mode = "IDLE"
+        pump_reason = "Đang chờ"
+        
+        current_lux = sim_state['lux']
+        current_temp_panel = sim_state['temp_panel']
+        health_score = random.uniform(80.0, 100.0)
+        
+        # Đọc trực tiếp biến system_state["mode"] do người dùng bấm trên Web
+        if system_state["mode"] in ["AUTO", "SMART_ECO"]:
+            if health_score < 85 and current_lux > 20000 and current_temp_panel < 50.0:
+                sim_state['pump_status'] = 1  
+                pump_mode = "CLEANING"
+                pump_reason = "Rửa trôi bề mặt (Bụi/Phân chim)"
+                
+            elif current_temp_panel >= 45.0:
+                sim_state['pump_status'] = 1  
+                pump_mode = "COOLING"
+                pump_reason = "Phun sương hạ nhiệt độ"
+                
+            else:
+                sim_state['pump_status'] = 0  
+                pump_mode = "IDLE"
+                pump_reason = "Hệ thống tối ưu"
+        
+                    
+        else:
+            # CHẾ ĐỘ THỦ CÔNG (MANUAL)
+             if sim_state['pump_status'] == 1:
+                # Đọc chữ CLEAN từ hệ thống chính
+                if system_state.get('last_manual_type') == 'CLEAN':
+                    pump_mode = "CLEANING"
+                    pump_reason = "Người dùng bật Làm Sạch"
+                else:
+                    pump_mode = "COOLING"
+                    pump_reason = "Người dùng bật Làm Mát"
+             else:
+                pump_mode = "IDLE"
+                pump_reason = "Đã tắt (Thủ công)"
 
 
 
-      
+        # 2. Bơm dữ liệu Kinh tế ảo (Để 2 thẻ màu xanh lá + cam nó nhảy)
+        socketio.emit('efficiency_data', {
+            "x_today_kwh": round(random.uniform(2.5, 5.0), 3),
+            "y_today_vnd": int(random.uniform(50000, 120000))
+        })
         # GỬI DỮ LIỆU ĐI
         fake_payload = {
             'lux_ref': int(sim_state['lux']),
@@ -1526,7 +1764,11 @@ def run_simulation():
             'temp_env': round(sim_state['temp_env'], 2),
             'humidity': int(sim_state['humidity']),
             'pump_status': sim_state['pump_status'],
-            'power': round(sim_power, 2)
+            'pump_mode': pump_mode,       
+            'pump_reason': pump_reason,   
+            'power': round(sim_power, 2),
+            'voltage': round(sim_voltage, 2), 
+            'current': round(sim_current, 2)  
         }
         
         # Gọi on_message giả lập
@@ -1535,24 +1777,11 @@ def run_simulation():
         try:
             on_message(None, None, MockMsg())
         except: pass
-        
-       
-        # BẮT ĐẦU CHÈN THÊM ĐỂ WEB HIỂN THỊ ĐỦ THÔNG SỐ
-       
-
-        # 1. Bơm dữ liệu AI dự báo (Tạo cái đuôi nét đứt trên biểu đồ)
-        mock_pred_temp = sim_state['temp_panel'] + (target_temp_dry - sim_state['temp_panel']) * 0.2
-        socketio.emit('ai_data', {'ai': {'pred_temp_5min': round(mock_pred_temp, 2)}})
-
-        # 2. Bơm dữ liệu Kinh tế ảo (Để 2 thẻ màu xanh lá + cam nó nhảy)
-        socketio.emit('efficiency_data', {
-            "x_today_kwh": round(random.uniform(2.5, 5.0), 3),
-            "y_today_vnd": int(random.uniform(50000, 120000))
-        })
-        
        
         # KẾT THÚC CHÈN THÊM
         
+
+
 
         # LOG MÀU MÈ ĐỂ DỄ NHÌN
         status_icon = "💦 MÁT" if sim_state['pump_status'] == 1 else "🔥 NÓNG"
@@ -1564,7 +1793,17 @@ def run_simulation():
         # if sim_state['temp_panel'] > 60: sim_state['pump_status'] = 1
         # if sim_state['temp_panel'] < 35: sim_state['pump_status'] = 0
 
-        time.sleep(0.5)
+        time.sleep(2)
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -9,7 +9,8 @@ from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.losses import Huber
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score 
-
+import tensorflow as tf
+import time 
 class SolarLSTM:
     def __init__(self, mac_address="default"):
         self.mac_address = mac_address
@@ -28,12 +29,18 @@ class SolarLSTM:
         
         self.data_history = []     
         self.new_data_buffer = []  
-        self.RETRAIN_THRESHOLD = 100 # Gom nhiều dữ liệu hơn chút rồi mới học
-        self.MAX_TRAIN_SIZE = 20000 
+
+        
+
+        self.MAX_TRAIN_SIZE = 50000 
         self.is_training = False 
         
+
+        self.retrain_interval = 30 * 24 * 60 * 60 
+        self.last_retrain_time = time.time() # Mốc thời gian lần cuối học
         # Biến lưu kết quả đánh giá gần nhất
         self.last_metrics = {"mae": 0, "rmse": 0, "r2": 0}
+
 
         self.load_scaler()
         self.load_ai_model()
@@ -59,6 +66,9 @@ class SolarLSTM:
             except:
                 self.model = None
 
+
+
+
     def update_data(self, basic_data):
         if any(v is None for v in basic_data): return
         
@@ -70,13 +80,30 @@ class SolarLSTM:
 
         self.save_to_csv(full_features)
         
-        self.new_data_buffer.append(full_features)
-        if len(self.new_data_buffer) >= self.RETRAIN_THRESHOLD and not self.is_training:
-             threading.Thread(target=self.retrain_model).start()
+        # [MỚI] KIỂM TRA ĐIỀU KIỆN THỜI GIAN ĐỂ RETRAIN
+        current_time = time.time()
+        time_elapsed = current_time - self.last_retrain_time
+        # Nếu đã trôi qua khoảng thời gian định kỳ VÀ không có luồng nào đang học
+        if time_elapsed >= self.retrain_interval and not self.is_training:
+            # Kiểm tra xem có đủ dữ liệu để học không (tối thiểu 1000 dòng để bõ công học)
+            if os.path.exists(self.data_file):
+                # (Mẹo nhỏ: Đếm số dòng file CSV mà không load toàn bộ vào RAM)
+                with open(self.data_file, 'r') as f:
+                    row_count = sum(1 for row in f)
+
+                if row_count > 1000:
+                    print(f"[{self.mac_address}] Đã đến hạn bảo trì AI ({self.retrain_interval/(24*3600):.1f} ngày). Khởi động quá trình Retrain...")
+                    self.last_retrain_time = current_time # Reset đồng hồ
+                    threading.Thread(target=self.retrain_model).start()
+
+
+
+
 
     def save_to_csv(self, data_row):
         try:
-            cols = ['lux', 't_panel', 't_env', 'hum', 'pump']
+            # Đổi 't_panel' thành 't_virtual'
+            cols = ['lux', 't_virtual', 't_env', 'hum', 'pump']
             df = pd.DataFrame([data_row], columns=cols)
             header = not os.path.exists(self.data_file)
             df.to_csv(self.data_file, mode='a', header=header, index=False)
@@ -87,7 +114,9 @@ class SolarLSTM:
         try:
             # 1. Dự báo thử trên tập Test
             y_pred_scaled = self.model.predict(X_test, verbose=0)
-            
+        
+            if isinstance(y_pred_scaled, tf.Tensor):
+                y_pred_scaled = y_pred_scaled.numpy()
             # 2. Giải nén (Inverse Scale) để ra nhiệt độ thật (Độ C)
             
             dummy_pred = np.zeros((len(y_pred_scaled), self.num_features))
@@ -132,7 +161,7 @@ class SolarLSTM:
             scaled_data = self.scaler.transform(dataset)
 
             X, y = [], []
-            STEPS_AHEAD = 12 
+            STEPS_AHEAD = 36 # giả sử 1 phút 1 mẫu và dự đoán trước 15 phút (12/5 -> 36/15)
             
             for i in range(self.window_size, len(scaled_data) - STEPS_AHEAD):
                 X.append(scaled_data[i-self.window_size:i, :]) 
@@ -155,9 +184,9 @@ class SolarLSTM:
                 self.model.add(Dense(16, activation='relu'))
                 self.model.add(Dense(1)) 
                 
-                # [MẸO 2] Dùng Huber Loss thay cho MSE 
+               
                 
-                self.model.compile(optimizer='adam', loss=Huber())
+                self.model.compile(optimizer='adam', loss=Huber(), run_eagerly=True)
             
             early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
             
@@ -198,15 +227,15 @@ class SolarLSTM:
                 dummy_row = np.zeros((1, self.num_features))
                 dummy_row[0, 1] = pred_scaled[0][0]
                 inversed_row = self.scaler.inverse_transform(dummy_row)
-                pred_temp_5min = inversed_row[0, 1]
+                pred_temp_15min = inversed_row[0, 1]
             except:
-                pred_temp_5min = current_temp_real
+                pred_temp_15min = current_temp_real
         else:
-            pred_temp_5min = current_temp_real
+            pred_temp_15min = current_temp_real
 
         return {
             "current_temp": round(current_temp_real, 2),
-            "pred_temp_5min": round(pred_temp_5min, 2),
+            "pred_temp_15min": round(pred_temp_15min, 2),
             "accuracy_mae": self.last_metrics["mae"] # Trả về sai số để hiển thị lên Web nếu cần
         }
 

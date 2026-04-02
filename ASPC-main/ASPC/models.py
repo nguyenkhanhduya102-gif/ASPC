@@ -15,6 +15,8 @@ class User(db.Model):
     avatar = db.Column(db.String(200), nullable=True) # Lưu tên file ảnh
     last_password_change = db.Column(db.DateTime, nullable=True) # Lưu ngày đổi pass
     
+    # [THÊM MỚI] Cột phân loại tài khoản: FREE, PRO, PREMIUM
+    tier = db.Column(db.String(20), default="FREE")
     
     stations = db.relationship('Station', backref='owner', lazy=True)
 

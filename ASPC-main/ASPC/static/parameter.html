@@ -151,12 +151,20 @@
                                             </div>
                                             <small class="text-muted" style="font-size: 0.75rem;">Dùng để AI xác định bậc giá điện EVN.</small>
                                         </div>
-                                        <div class="mb-3">
-                                            <label for="alpha_p" class="form-label">Hệ Số Tăng Công Suất (Alpha)</label>
-                                            <div class="input-group">
-                                                <input type="number" class="form-control" id="alpha_p" step="0.1" required>
-                                                <span class="input-group-text">%</span>
-                                            </div>
+
+
+                                        <!-- TÌM ĐOẠN NÀY VÀ THAY THẾ TRONG parameter.html -->
+<div class="mb-3">
+    <label for="alpha_p" class="form-label">Hệ Số Suy Hao Nhiệt (Gamma)</label>
+    <div class="input-group">
+        <input type="number" class="form-control" id="alpha_p" step="0.01" required>
+        <span class="input-group-text">%/°C</span>
+    </div>
+    <small class="text-muted" style="font-size: 0.75rem;">VD: Tấm pin Mono thường là 0.35 đến 0.45</small>
+</div>
+
+
+
                                             <small class="text-muted" style="font-size: 0.75rem;">Mức cải thiện dự kiến khi làm mát.</small>
                                         </div>
                                     </div>
