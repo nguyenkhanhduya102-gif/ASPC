@@ -41,7 +41,7 @@ from flask_socketio import SocketIO, emit
 import paho.mqtt.client as mqtt
 from models import db, User, Station, Device, SensorData,CommandHistory
 from sqlalchemy import func, extract
-from ai_engine import SolarLSTM 
+from ai_engine import SolarMLP
 from health_engine import SolarHealthEngine
 from optimizer import SolarOptimizer
 from hotspot_engine import HotspotDetector
@@ -235,7 +235,7 @@ def get_engines(mac_address):
     if mac_address not in device_engines:
         print(f"⚙️ Khởi tạo bộ máy AI & Logic cho thiết bị: {mac_address}")
         device_engines[mac_address] = {
-            "ai": SolarLSTM(mac_address=mac_address),
+            "ai": SolarMLP(mac_address=mac_address),
             "health": SolarHealthEngine(mac_address=mac_address),
             "optimizer": SolarOptimizer(), # Optimizer không lưu file nên dùng mặc định
             "hotspot": HotspotDetector()   # Hotspot chỉ tính toán tức thời nên dùng mặc định
@@ -318,6 +318,7 @@ def fetch_weather_forecast():
 
 
 def get_weather_cached():
+    
     if weather_cache.get() is None or weather_cache.is_stale():
         payload = fetch_weather_forecast()
         if payload is not None:
@@ -326,6 +327,15 @@ def get_weather_cached():
             # Nếu fetch fail thì vẫn trả cache cũ (nếu có)
             return weather_cache.get()
     return weather_cache.get()
+# HÀM MỚI NẰM TÁCH BIỆT BÊN NGOÀI
+def get_current_wind_speed():
+    try:
+        weather_data = get_weather_cached()
+        if weather_data and 'forecast' in weather_data and len(weather_data['forecast']) > 0:
+            return float(weather_data['forecast'][0].get('wind_speed', 0))
+    except:
+        pass
+    return 0.0
 
 
 
@@ -624,18 +634,17 @@ def check_protection_alerts(temp_panel, temp_env, humidity, lux, p_actual, pump_
 
 
 #  [LOGIC QUAN TRỌNG] KIỂM TRA & RA QUYẾT ĐỊNH 
-def check_system_decision(mac_address,temp_panel , lux ,p_max, pump_status):
+def check_system_decision(mac_address, temp_panel, temp_env, humidity, lux, wind_speed, p_max, pump_status):
     global system_state
     current_time = time.time()
 
-#Lấy bộ não trong hàm ra sử dụng
     engines = get_engines(mac_address)
     ai_brain = engines["ai"]
     health_brain = engines["health"]
     optimizer_brain = engines["optimizer"]
 
-    # 1. Dự báo nhiệt độ cơ bản (cho Auto/Manual cũ)
-    ai_result = ai_brain.predict()
+    # 1. Truyền 5 tham số vào AI
+    ai_result = ai_brain.predict(temp_env, humidity, lux, wind_speed, pump_status)
     pred_temp_basic = ai_result['pred_temp_15min'] if ai_result else temp_panel
 
     
@@ -643,9 +652,8 @@ def check_system_decision(mac_address,temp_panel , lux ,p_max, pump_status):
     
     if system_state["mode"] == "SMART_ECO":
         # A. AI Dự báo 2 kịch bản tương lai
-        pred_off = ai_brain.predict_scenario(0) # Nếu Tắt bơm
-        pred_on = ai_brain.predict_scenario(1)  # Nếu Bật bơm
-
+        pred_off = ai_brain.predict_scenario(temp_env, humidity, lux, wind_speed, 0) # Nếu Tắt bơm
+        pred_on = ai_brain.predict_scenario(temp_env, humidity, lux, wind_speed, 1)  # Nếu Bật bơm
         # Fallback nếu AI chưa đủ dữ liệu (Dùng logic thô)
         if pred_off is None: pred_off = temp_panel + 0.5
         if pred_on is None: pred_on = temp_panel - 2.0
@@ -770,39 +778,6 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe(TOPIC_SUB)
 
 
-# [THÊM MỚI] Hàm tính Nhiệt độ Ảo từ Công suất (Công thức NREL)
-def calculate_virtual_temp(p_actual_W, lux, p_max, alpha_p, temp_env):
-    """
-    Tính nhiệt độ ảo T_cell dựa trên công thức NREL:
-    P_dc = (I_tr / 1000) * P_dc0 * [1 + gamma * (T_cell - 25)]
-    """
-    # 1. Bỏ qua nếu trời quá tối hoặc thông số sai (để tránh chia cho 0)
-    if lux < 2000 or p_max <= 0 or alpha_p == 0:
-        return temp_env # Trả về bằng môi trường nếu không đủ sáng
-
-    # 2. Quy đổi Lux sang Bức xạ W/m2 (Hệ số quy đổi trung bình là ~116)
-    g_w_m2 = lux / 116.0
-
-    # 3. Tính Công suất lý thuyết ở điều kiện STC (25 độ C)
-    p_theory_stc = (g_w_m2 / 1000.0) * p_max
-    
-    if p_theory_stc <= 0: return temp_env
-
-    # 4. Xử lý hệ số Gamma (Đảm bảo nó luôn âm để đảo dấu công thức đúng)
-    # Ví dụ alpha_p là 0.4% thì ta dùng -0.004
-    gamma = -abs(alpha_p) 
-    
-    # 5. Giải phương trình tìm T_cell:
-    # T_cell = 25 + (1 / gamma) * ((P_actual / P_theory_stc) - 1)
-    ratio = p_actual_W / p_theory_stc
-    
-    t_virtual = 25.0 + (1.0 / gamma) * (ratio - 1.0)
-    
-    # 6. Giới hạn vật lý (Lọc nhiễu nếu dữ liệu Inverter trả về ảo)
-    if t_virtual < temp_env - 5.0: t_virtual = temp_env - 5.0 # Khó có chuyện lạnh hơn môi trường quá 5 độ
-    if t_virtual > 90.0: t_virtual = 90.0
-    
-    return t_virtual
 
 
 def on_message(client, userdata, msg):
@@ -848,12 +823,17 @@ def on_message(client, userdata, msg):
         # Xử lý Trạng thái bơm (Quan trọng: Chấp nhận cả 1, "1", "true", "ON")
         raw_pump = data.get('pump_status', 0)
         pump_status = 1 if str(raw_pump).upper() in ['1', 'TRUE', 'ON'] else 0
-        
-# [MỚI] TÍNH TOÁN NHIỆT ĐỘ ẢO (VIRTUAL SENSOR) THAY VÌ ĐỌC TỪ CẢM BIẾN
-        p_max_current = health_brain.p_max
-        alpha_p = optimizer_brain.alpha_p
+        # Lấy gió từ API
+        wind_speed = get_current_wind_speed()
 
-        calc_t = calculate_virtual_temp(p_actual_W, lux, p_max_current, alpha_p, temp_env)
+        # Dùng AI để tính Nhiệt độ ảo và Dự báo
+        ai_result = ai_brain.predict(temp_env, humidity, lux, wind_speed, pump_status)
+        
+        if ai_result:
+            calc_t = ai_result["current_t_cell"]
+            socketio.emit('ai_data', {'ai': ai_result})
+        else:
+            calc_t = temp_env + (lux / 4000.0) # Fallback
 
         temp_panel = get_smooth_temp(calc_t)
         #chèn thêm
@@ -940,13 +920,11 @@ def on_message(client, userdata, msg):
         ai_brain.update_data(data_package)
         # Kiểm tra logic điều khiển (Gửi temp_panel đã mượt vào)
         check_system_decision(
-            mac_address,
-            temp_panel, 
-            lux, 
-            health_brain.p_max
-            , pump_status)
+            mac_address, temp_panel, lux, health_brain.p_max, pump_status,
+            temp_env, humidity, wind_speed  # Thêm 3 biến này vào cuối
+        )
 
-        ai_result = ai_brain.predict()
+        ai_result = ai_brain.predict(temp_env, humidity, lux, wind_speed, pump_status)
         if ai_result:
             socketio.emit('ai_data', {'ai': ai_result})
 
@@ -1183,7 +1161,7 @@ def generate_video_frames():
         # Trả về từng frame cho Web
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-# ==========================================
+
 
 
 
@@ -1291,7 +1269,7 @@ def get_params_api():
 
 
 
-# --- ROUTES & SOCKET EVENTS ---
+
 # --- CƠ CHẾ BẢO VỆ TRANG (LOGIN REQUIRED) ---
 def login_required(f):
     @wraps(f)
@@ -1763,6 +1741,7 @@ def run_simulation():
             'temp_panel': round(sim_state['temp_panel'], 2),
             'temp_env': round(sim_state['temp_env'], 2),
             'humidity': int(sim_state['humidity']),
+            'wind_speed': 2.5,
             'pump_status': sim_state['pump_status'],
             'pump_mode': pump_mode,       
             'pump_reason': pump_reason,   
@@ -1789,7 +1768,7 @@ def run_simulation():
 
         # Kiểm tra nếu AI ra lệnh (đọc biến global hoặc logic Smart Eco)
         # Ở đây ta giả lập: Cứ nóng quá 55 độ thì tự bật, mát dưới 35 thì tự tắt (Hardcode test)
-        # Bạn có thể bỏ đoạn này nếu muốn test bằng nút bấm trên Web
+       
         # if sim_state['temp_panel'] > 60: sim_state['pump_status'] = 1
         # if sim_state['temp_panel'] < 35: sim_state['pump_status'] = 0
 
