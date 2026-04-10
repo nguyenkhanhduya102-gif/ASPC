@@ -134,9 +134,7 @@
                             <li class="nav-item">
                                 <button class="nav-link fw-bold border-0 bg-light rounded-3 w-100" data-bs-toggle="tab" data-bs-target="#security-tab">Bảo mật & Mật khẩu</button>
                             </li>
-                            <li class="nav-item">
-                                <button class="nav-link fw-bold border-0 bg-light rounded-3 w-100" data-bs-toggle="tab" data-bs-target="#demo-tab"><i class="fas fa-crown text-warning"></i> Quản lý Gói (Demo)</button>
-                           </li>
+                            
                         </ul>
 
                         <div class="tab-content">
@@ -165,32 +163,7 @@
                             </div>
 
                             <!-- TAB BẢO MẬT -->
-                                                         <!-- TAB DEMO CHỌN GÓI -->
-                            <div class="tab-pane fade" id="demo-tab">
-                                <h6 class="fw-bold mb-3 text-secondary">Chọn gói cước để Demo giao diện:</h6>
-                                <p class="text-muted small mb-4">Gói hiện tại của bạn: <strong class="text-primary fs-5">{{ tier }}</strong></p>
-                                
-                                <div class="row g-3">
-                                    <div class="col-md-4">
-                                        <div class="tier-box {% if tier == 'FREE' %}active-tier{% endif %}" onclick="changeTier('FREE')">
-                                            <h4 class="fw-bold text-secondary">FREE</h4>
-                                            <p class="small text-muted mb-0">Chỉ xem Dashboard</p>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="tier-box {% if tier == 'PRO' %}active-tier{% endif %}" onclick="changeTier('PRO')">
-                                            <h4 class="fw-bold text-info">PRO</h4>
-                                            <p class="small text-muted mb-0">Sức khỏe + Thời tiết</p>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="tier-box {% if tier == 'PREMIUM' %}active-tier{% endif %}" onclick="changeTier('PREMIUM')">
-                                            <h4 class="fw-bold text-warning">PREMIUM</h4>
-                                            <p class="small text-muted mb-0">Mở khóa Computer Vision</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                                                        
 
                             <div class="tab-pane fade" id="security-tab">
                                 <div class="alert alert-warning border-0 bg-warning-subtle text-warning-emphasis fw-medium mb-4">
@@ -331,14 +304,7 @@
             setTimeout(() => alertBox.innerHTML = '', 5000);
             btn.disabled = false;
         });
-        async function changeTier(newTier) {
-            if(!confirm(`Xác nhận chuyển tài khoản sang gói ${newTier}?`)) return;
-            const res = await fetch('/api/profile/update_tier', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({tier: newTier})
-            });
-            if(res.ok) window.location.reload();
-        }
+        
     </script>
 </body>
 </html>

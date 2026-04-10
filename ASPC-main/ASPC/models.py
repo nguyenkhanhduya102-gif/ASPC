@@ -77,3 +77,13 @@ class CommandHistory(db.Model):
     command = db.Column(db.String(50))
     action_type = db.Column(db.String(50))
     source = db.Column(db.String(50))
+
+# BẢNG THÔNG BÁO TỚI KHÁCH HÀNG (NOTIFICATION)
+class Notification(db.Model):
+    __tablename__ = 'notifications'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.String(50), nullable=False) # Gửi cho user nào (hoặc 'ALL' nếu gửi toàn bộ)
+    message = db.Column(db.String(500), nullable=False)
+    type = db.Column(db.String(20), default='info') # info, success, warning
+    is_read = db.Column(db.Boolean, default=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)

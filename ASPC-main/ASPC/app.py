@@ -39,7 +39,7 @@ from collections import deque
 from flask import Flask, render_template
 from flask_socketio import SocketIO, emit
 import paho.mqtt.client as mqtt
-from models import db, User, Station, Device, SensorData,CommandHistory
+from models import Notification, db, User, Station, Device, SensorData,CommandHistory
 from sqlalchemy import func, extract
 from ai_engine import SolarMLP
 from health_engine import SolarHealthEngine
@@ -441,12 +441,6 @@ class EnergyManager:
             "z_month_percent": round(z_percent, 1),
             "total_real_kwh_today": round(self.e_real_today / 1000, 3)
         }
-
-
-
-
-
-
 # Khởi tạo Global
 energy_manager = EnergyManager()
 # DATABASE HELPERS 
@@ -466,6 +460,8 @@ def save_history(user, cmd, action_type, source):
 
 # Hàng đợi để lưu 5 giá trị nhiệt độ gần nhất
 temp_history = deque(maxlen=5)
+
+
 
 
 
@@ -522,6 +518,7 @@ def get_monthly_report(year, month):
     except Exception as e:
         print(f"Lỗi xuất báo cáo: {e}")
         return {"error": str(e)}
+
 
 
 
@@ -712,7 +709,7 @@ def check_system_decision(mac_address, temp_panel, temp_env, humidity, lux, wind
         # Gửi dữ liệu kinh tế để vẽ biểu đồ (nếu cần)
         socketio.emit('economic_data', {'profit': profit, 'delta_e': delta_e, 'reason': reason})
    
-    # CHẾ ĐỘ 2: AUTO (LOGIC CŨ - DỰA VÀO NGƯỠNG NHIỆT)
+    # CHẾ ĐỘ 2: AUTO (DỰA VÀO NGƯỠNG NHIỆT)
     
     elif system_state["mode"] == "AUTO":
         # A. Logic bật bơm 
@@ -737,8 +734,7 @@ def check_system_decision(mac_address, temp_panel, temp_env, humidity, lux, wind
                     save_history("AI_AUTO", "BẬT", "Quá nhiệt", "AUTO")
                     socketio.emit('system_alert', {'level': 'danger', 'message': 'AUTO: Đã bật bơm bảo vệ!'})
 
-# B. Logic TẮT
-
+# B. Logic tắt bơm có kết hợp ngưỡng nhiệt  
         elif system_state["is_auto_running"]:
             run_duration = current_time - system_state["last_auto_start"]
             if temp_panel < TEMP_THRESHOLD_SAFE and run_duration > MIN_RUN_TIME:
@@ -749,8 +745,9 @@ def check_system_decision(mac_address, temp_panel, temp_env, humidity, lux, wind
                 socketio.emit('system_alert', {'level': 'success', 'message': 'AUTO: Nhiệt độ ổn định. Tắt bơm.'})
 
     
-    # CHẾ ĐỘ 3: MANUAL (CHỈ ĐƯA RA LỜI KHUYÊN)
+    # CHẾ ĐỘ 3: MANUAL (Đưa ra lời khuyên hoạt động)
    
+
     else: 
         # Lời khuyên BẬT
         if pred_temp_basic >= TEMP_THRESHOLD_HIGH and pump_status == 0:
@@ -773,7 +770,7 @@ def check_system_decision(mac_address, temp_panel, temp_env, humidity, lux, wind
 
 
 
-# --- MQTT HANDLERS ---
+#MQTT HANDLERS 
 def on_connect(client, userdata, flags, rc):
     client.subscribe(TOPIC_SUB)
 
@@ -881,7 +878,8 @@ def on_message(client, userdata, msg):
                 default_device = Device.query.first()
                 if not default_device:
                     # Khởi tạo dữ liệu mẫu nếu DB trống
-                    user = User(username="admin", password_hash="123456")
+                    user = User(username="admin0202@gmail.com", password_hash=generate_password_hash("02022005D@", method='pbkdf2:sha256')
+)
                     db.session.add(user)
                     db.session.commit()
                     
@@ -978,7 +976,8 @@ def on_message(client, userdata, msg):
             else:
                 pump_mode = "IDLE"
                 pump_reason = "Hệ thống tối ưu"
-        # 3. Gửi dữ liệu ra Web
+
+        # 3. Gửi dữ liệu ra web để hiển thị 
         socketio.emit('sensor_data', {
             'temp_panel': round(temp_panel,2),
             'temp_env': round(temp_env,2),
@@ -1234,6 +1233,33 @@ def get_weather_api():
     return jsonify({"status": "success", "data": result})
 
 
+# [API MỚI] NHẬN CẢNH BÁO TỪ TRẠM AI YOLO (CỔNG 5001)
+
+@app.route('/api/camera_alert', methods=['POST'])
+def camera_alert_api():
+    try:
+        data = request.get_json()
+        if data:
+            # Lấy thông tin lỗi YOLO gửi sang
+            alert_type = data.get('type', 'LỖI KHÔNG XÁC ĐỊNH')
+            confidence = data.get('confidence', 0)
+            message = data.get('message', 'AI phát hiện vật cản bất thường!')
+            
+            # 1. Phát cảnh báo đỏ chót lên giao diện Web ngay lập tức
+            socketio.emit('system_alert', {
+                'level': 'CRITICAL',      # Báo động đỏ
+                'type': 'camera_ai',      # Phân loại là lỗi từ Camera
+                'issue_name': alert_type, # Tên lỗi (Ví dụ: Dusty, Bird Drop)
+                'message': message,
+                'confidence': confidence
+            })
+            
+            # 2. Lưu vào Lịch sử hệ thống
+            save_history("YOLO_VISION", "PHÁT HIỆN LỖI", alert_type, "CAMERA_AI")
+            
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
 # [API MỚI] Lấy thông số hiện tại để hiển thị lên form
@@ -1281,33 +1307,173 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- ROUTES XỬ LÝ AUTHENTICATION ---
+
+
+
+
+
+
+# --- TÌM VÀ THAY THẾ HÀM LOGIN CŨ BẰNG ĐOẠN NÀY ---
 @app.route('/login', methods=['GET', 'POST'])
 def login_page():
-    # Nếu đang có session (Đã đăng nhập), tự động vô Dashboard không cần đăng nhập lại
+    # Nếu đã đăng nhập từ trước
     if 'user_id' in session:
+        if session.get('role') == 'admin':
+            return redirect(url_for('admin_dashboard'))
         return redirect(url_for('dashboard'))
 
-    # Khi người dùng bấm nút Đăng Nhập
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
         
-        # Tìm user trong DB
         user = User.query.filter_by(username=username).first()
         
-        # Kiểm tra đúng tài khoản & mật khẩu
         if user and check_password_hash(user.password_hash, password):
             session['user_id'] = user.id
             session['username'] = user.username
             session['avatar'] = user.avatar or ""
             session['tier'] = user.tier
-            return redirect(url_for('dashboard'))
+            
+            # [LOGIC PHÂN QUYỀN]: Chỉ định 'admin' làm sếp
+            if user.username.lower() == 'admin0202@gmail.com':
+                session['role'] = 'admin'
+                return redirect(url_for('admin_dashboard'))
+            else:
+                session['role'] = 'customer'
+                return redirect(url_for('dashboard'))
         else:
             flash("Tên đăng nhập hoặc mật khẩu không chính xác!", "danger")
             return redirect(url_for('login_page'))
             
     return render_template('login.html')
+
+# --- DÁN THÊM ĐOẠN NÀY NGAY DƯỚI HÀM LOGIN ---
+# ==========================================
+# KHU VỰC SUPER ADMIN (COMMAND CENTER)
+# ==========================================
+# ==========================================
+# API HỘP THƯ THÔNG BÁO (NOTIFICATION)
+# ==========================================
+
+# 1. ADMIN GỬI THÔNG BÁO TỚI KHÁCH HÀNG
+@app.route('/api/admin/send_notification', methods=['POST'])
+@login_required
+def admin_send_notification():
+    if session.get('role') != 'admin':
+        return jsonify({"status": "error"}), 403
+        
+    data = request.json
+    target_user_id = data.get('user_id', 'ALL') # Mặc định gửi tất cả
+    message = data.get('message', '')
+    msg_type = data.get('type', 'info')
+    
+    if message:
+        # Lưu vào Database
+        new_noti = Notification(user_id=str(target_user_id), message=message, type=msg_type)
+        db.session.add(new_noti)
+        db.session.commit()
+        
+        # Bắn realtime Socket qua Web ngay lập tức
+        socketio.emit('new_notification', {
+            'user_id': target_user_id,
+            'message': message,
+            'type': msg_type,
+            'time': datetime.now().strftime("%H:%M")
+        })
+        return jsonify({"status": "success", "message": "Đã gửi thông báo!"})
+    return jsonify({"status": "error"}), 400
+
+# 2. KHÁCH HÀNG LẤY DANH SÁCH THÔNG BÁO CỦA MÌNH
+@app.route('/api/user/get_notifications', methods=['GET'])
+@login_required
+def get_user_notifications():
+    user_id = str(session.get('user_id'))
+    # Lấy thông báo gửi riêng cho User này HOẶC gửi chung cho ALL
+    notis = Notification.query.filter(
+        (Notification.user_id == user_id) | (Notification.user_id == 'ALL')
+    ).order_by(Notification.id.desc()).limit(10).all()
+    
+    data = [{
+        "id": n.id,
+        "message": n.message,
+        "type": n.type,
+        "is_read": n.is_read,
+        "time": n.timestamp.strftime("%d/%m - %H:%M")
+    } for n in notis]
+    
+    return jsonify({"status": "success", "data": data})
+
+
+
+
+# KHU VỰC SUPER ADMIN (COMMAND CENTER) - BẢN FULL CHỨC NĂNG
+
+@app.route('/admin')
+@login_required
+def admin_dashboard():
+    # 1. Bức tường lửa: Chặn khách hàng vào trang Admin
+    if session.get('role') != 'admin':
+        flash("⛔ Lỗi: Khu vực quân sự, cấm xâm nhập!", "danger")
+        return redirect(url_for('dashboard'))
+        
+    # 2. Lấy danh sách khách hàng (Quản lý CRM)
+    users = User.query.filter(User.username != 'admin0202@gmail.com').all()
+    
+    # Tính toán doanh thu thực tế
+    premium_count = sum(1 for u in users if u.tier == 'PREMIUM')
+    pro_count = sum(1 for u in users if u.tier == 'PRO')
+    revenue = (premium_count * 19.99) + (pro_count * 9.99)
+    
+    # 3. [TÍNH NĂNG MỚI] Thống kê dữ liệu IoT thực tế từ Database
+    total_stations = Device.query.count() # Tổng số trạm IoT đang quản lý
+    if total_stations == 0: total_stations = 1 # Mặc định luôn có ít nhất 1 trạm ESP32_DEFAULT
+    
+    total_records = SensorData.query.count() # Tổng số dòng dữ liệu cảm biến đã thu thập
+    
+    # 4. [TÍNH NĂNG MỚI] Lấy Log hệ thống thật (10 hành động gần nhất)
+    recent_logs = CommandHistory.query.order_by(CommandHistory.id.desc()).limit(8).all()
+    
+    # Truyền toàn bộ dữ liệu siêu khủng này ra file HTML
+    return render_template('admin.html', 
+                           users=users, 
+                           session_user=session.get('username'),
+                           revenue=round(revenue, 2),
+                           total_users=len(users),
+                           total_stations=total_stations,
+                           total_records=total_records,
+                           recent_logs=recent_logs)
+
+@app.route('/api/admin/upgrade_tier', methods=['POST'])
+@login_required
+def admin_upgrade_tier():
+    if session.get('role') != 'admin':
+        return jsonify({"status": "error", "message": "Không đủ thẩm quyền!"}), 403
+        
+    data = request.json
+    user = User.query.get(data.get('user_id'))
+    # TÌM ĐOẠN ĐỔI TIER CŨ VÀ SỬA THÀNH:
+    if user:
+        old_tier = user.tier
+        user.tier = data.get('new_tier')
+        
+        # Tự động tạo tin nhắn thông báo
+        auto_msg = f"🎉 Chúc mừng! Tài khoản của bạn đã được nâng cấp từ {old_tier} lên gói {user.tier} thành công."
+        new_noti = Notification(user_id=str(user.id), message=auto_msg, type="success")
+        db.session.add(new_noti)
+        
+        db.session.commit()
+        
+        # Bắn realtime sang Web khách
+        socketio.emit('new_notification', {'user_id': str(user.id), 'message': auto_msg, 'type': 'success', 'time': 'Vừa xong'})
+        
+        return jsonify({"status": "success", "message": f"Đã cấp gói {user.tier}!"})
+
+
+#
+
+
+
+
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -1421,6 +1587,7 @@ def get_economic_report_api(year, month):
 
 
 # API QUẢN LÝ HỒ SƠ NGƯỜI DÙNG (PROFILE)
+
 @app.route('/api/profile/update_tier', methods=['POST'])
 @login_required
 def update_tier():

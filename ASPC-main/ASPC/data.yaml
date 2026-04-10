@@ -1,0 +1,6 @@
+train: train/images
+val: valid/images   # Lưu ý: Tên thư mục của bạn là 'valid' thì ghi là valid/images
+test: test/images
+
+nc: 7
+names: ['Bird Drop', 'Defective', 'Dusty', 'Electrical Damage', 'Non Defective', 'Physical Damage', 'Snow']

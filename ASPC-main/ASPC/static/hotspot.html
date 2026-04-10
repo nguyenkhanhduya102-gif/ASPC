@@ -121,7 +121,8 @@
                         <div class="camera-container">
                             <div class="live-badge"><i class="fas fa-circle"></i> LIVE AI REC</div>
                             <!-- Liên kết thẳng tới stream của Backend OpenCV -->
-                            <img src="/video_feed" id="thermal-camera" class="img-fluid" style="width:100%; height:100%; object-fit: cover;" alt="Đang khởi động Camera AI...">
+                            <!-- Liên kết thẳng tới stream của YOLO Vision AI (Cổng 5001) -->
+                            <img src="http://127.0.0.1:5001/video_feed" id="thermal-camera" class="img-fluid" style="width:100%; height:100%; object-fit: cover;" alt="Đang khởi động YOLO AI...">
                         </div>
                         <div class="d-flex justify-content-between mt-3 px-2 text-muted small fw-bold">
                             <span>FPS: 30</span>
@@ -212,6 +213,8 @@
         function changeStation(mac) { localStorage.setItem('device_id', mac); window.location.reload(); }
 
 
+
+
         // Bắt Socket để nhảy cảnh báo nếu có Hotspot
         const socket = io();
         socket.on('sensor_data', (data) => {
@@ -219,70 +222,115 @@
                 document.getElementById('ai-dust-val').innerText = data.dust_level.toFixed(1) + '%';
                 document.getElementById('ai-dust-bar').style.width = data.dust_level + '%';
             }
-            
-            // Xử lý hiện thẻ cảnh báo nếu có Hotspot
-            const box = document.getElementById('hotspot-status-box');
-            if(data.hotspot_detected) {
-                box.innerHTML = `
-                    <div class="alert-item" style="animation: pulse 1s infinite alternate;">
-                        <div class="fw-bold text-danger mb-1"><i class="fas fa-fire me-1"></i> PHÁT HIỆN ĐIỂM NÓNG!</div>
-                        <span class="small text-danger">AI phát hiện vùng nhiệt độ chênh lệch bất thường. Nguy cơ cháy nổ! Bơm sẽ tự kích hoạt nếu ở chế độ Smart.</span>
-                    </div>
-                `;
-            } else {
-                box.innerHTML = `
-                    <div class="alert-item safe">
-                        <div class="fw-bold text-success mb-1"><i class="fas fa-check-circle me-1"></i> Bề mặt an toàn</div>
-                        <span class="small text-muted">Không phát hiện điểm nóng. Bề mặt tản nhiệt đồng đều.</span>
-                    </div>
-                `;
-            }
-        });
-        //CHÈN THÊM: Lắng nghe cảnh báo hệ thống từ Backend (như quá dòng, sụt áp, chập nước...)
-        socket.on('system_alert', (alert) => {
-            // alert có dạng: {level: 'CRITICAL', message: '...', type: 'insulation'}
-            if(alert.type) {
-                const boxId = 'alert-' + alert.type;
-                const iconId = 'icon-' + alert.type;
-                const textId = 'text-' + alert.type;
-                
-                const boxEl = document.getElementById(boxId);
-                const iconEl = document.getElementById(iconId);
-                const textEl = document.getElementById(textId);
-                
-                if(boxEl) {
-                    // Chuyển sang màu ĐỎ BÁO ĐỘNG
-                    boxEl.style.backgroundColor = '#fef2f2';
-                    boxEl.style.borderColor = '#ef4444 !important';
-                    
-                    iconEl.classList.remove('text-success');
-                    iconEl.classList.add('text-danger');
-                    // Thêm hiệu ứng chớp nháy
-                    iconEl.style.animation = 'blink 1s infinite';
-                    
-                    textEl.innerText = "CẢNH BÁO LỖI!";
-                    textEl.classList.remove('text-muted');
-                    textEl.classList.add('text-danger', 'fw-bold');
+             });
 
-                    // Tùy chọn: Tự động reset về màu xanh sau 10 giây nếu hết lỗi
-                    setTimeout(() => {
-                        boxEl.style.backgroundColor = '#ecfdf5';
-                        boxEl.style.borderColor = '#10b981 !important';
-                        iconEl.classList.remove('text-danger');
-                        iconEl.classList.add('text-success');
-                        iconEl.style.animation = 'none';
-                        
-                        textEl.classList.remove('text-danger', 'fw-bold');
-                        textEl.classList.add('text-muted');
-                        
-                        if(alert.type === 'insulation') textEl.innerText = "Ổn định";
-                        if(alert.type === 'voltage_drop') textEl.innerText = "Ổn định";
-                        if(alert.type === 'hardware_failure') textEl.innerText = "Khô ráo";
-                        if(alert.type === 'sensor_malfunction') textEl.innerText = "Bình thường";
-                    }, 10000);
-                }
-            }
-        });
+
+
+
+
+        //CHÈN THÊM: Lắng nghe cảnh báo hệ thống từ Backend (như quá dòng, sụt áp, chập nước...)
+
+       // BẮT LẮNG NGHE CẢNH BÁO TỪ BACKEND
+       
+// BẮT LẮNG NGHE TẤT CẢ CẢNH BÁO TỪ HỆ THỐNG  
+
+socket.on('system_alert', (alert) => {
+    
+    // 1. NẾU LÀ CẢNH BÁO TỪ CAMERA AI (YOLO)
+    if(alert.type === 'camera_ai') {
+        const box = document.getElementById('hotspot-status-box');
+        
+        // Cập nhật thanh Bụi nếu là lỗi Dusty
+        let issueName = (alert.issue_name || "").toLowerCase();
+        if(issueName.includes('dust')) {
+            document.getElementById('ai-dust-val').innerText = alert.confidence + '%';
+            document.getElementById('ai-dust-bar').style.width = alert.confidence + '%';
+            document.getElementById('ai-dust-bar').className = 'progress-bar bg-warning';
+        }
+
+        // LOGIC MỚI: ĐƯA RA LỜI KHUYÊN THEO TỪNG LỖI
+        let action_msg = "";
+        let alert_color = "#ef4444"; // Mặc định màu đỏ
+        let bg_color = "#fef2f2";
+
+        if (issueName.includes('defective') || issueName.includes('crack')) {
+            action_msg = "⚠️ NGUY HIỂM: Hỏng vật lý/Nứt kính. Yêu cầu NGẮT ĐIỆN và thay thế. TUYỆT ĐỐI KHÔNG BẬT BƠM NƯỚC để tránh chập điện!";
+            alert_color = "#dc2626"; // Đỏ đậm
+        } 
+        else if (issueName.includes('dust')) {
+            action_msg = "💡 LỜI KHUYÊN: Bề mặt bám bụi diện rộng. Kích hoạt Robot lau chùi hoặc Bơm nước rửa trôi để phục hồi hiệu suất.";
+            alert_color = "#f59e0b"; // Cam vàng
+            bg_color = "#fffbeb";
+        }
+        else if (issueName.includes('bird')) {
+            action_msg = "💡 LỜI KHUYÊN: Bám phân chim (Điểm nóng cục bộ). Cần phun sương làm mềm và kích hoạt gạt nước.";
+            alert_color = "#f97316"; // Cam
+            bg_color = "#fff7ed";
+        }
+        else {
+            action_msg = "Phát hiện vật cản bất thường. Cử nhân viên kiểm tra bề mặt.";
+        }
+
+        // Đổ giao diện ra Web
+        if(box) {
+            box.innerHTML = `
+                <div class="alert-item" style="animation: pulse 1s infinite alternate; background-color: ${bg_color}; border-left: 4px solid ${alert_color}; padding: 15px; border-radius: 8px;">
+                    <div class="fw-bold mb-1" style="color: ${alert_color};"><i class="fas fa-crosshairs me-1"></i> AI PHÁT HIỆN: ${(alert.issue_name || "LỖI").toUpperCase()}</div>
+                    <span class="small text-danger fw-bold">${alert.message}</span>
+                    <div class="mt-2 small fw-bold text-dark p-2 rounded" style="background: rgba(0,0,0,0.05); border-left: 2px solid ${alert_color};">${action_msg}</div>
+                </div>
+            `;
+
+            // Tự động trả về An toàn sau 10s
+            setTimeout(() => {
+                box.innerHTML = `
+                    <div class="alert-item safe" style="border-left: 4px solid #10b981; background: #ecfdf5; padding: 15px; border-radius: 8px;">
+                        <div class="fw-bold text-success mb-1"><i class="fas fa-check-circle me-1"></i> Bề mặt an toàn</div>
+                        <span class="small text-muted">AI đang liên tục quét và phân tích. Chưa phát hiện vật cản.</span>
+                    </div>
+                `;
+            }, 10000);
+        }
+    }
+    
+    // 2. NẾU LÀ CẢNH BÁO PHẦN CỨNG (Sụt áp, quá dòng... code cũ của bạn)
+    else if(alert.type) {
+        const boxId = 'alert-' + alert.type;
+        const iconId = 'icon-' + alert.type;
+        const textId = 'text-' + alert.type;
+        
+        const boxEl = document.getElementById(boxId);
+        const iconEl = document.getElementById(iconId);
+        const textEl = document.getElementById(textId);
+        
+        if(boxEl && iconEl && textEl) {
+            boxEl.style.backgroundColor = '#fef2f2';
+            boxEl.style.borderColor = '#ef4444 !important';
+            iconEl.classList.remove('text-success');
+            iconEl.classList.add('text-danger');
+            
+            textEl.innerText = "CẢNH BÁO LỖI!";
+            textEl.classList.remove('text-muted');
+            textEl.classList.add('text-danger', 'fw-bold');
+
+            setTimeout(() => {
+                boxEl.style.backgroundColor = '#ecfdf5';
+                boxEl.style.borderColor = '#10b981 !important';
+                iconEl.classList.remove('text-danger');
+                iconEl.classList.add('text-success');
+                
+                textEl.classList.remove('text-danger', 'fw-bold');
+                textEl.classList.add('text-muted');
+                
+                if(alert.type === 'insulation') textEl.innerText = "Ổn định";
+                if(alert.type === 'voltage_drop') textEl.innerText = "Ổn định";
+                if(alert.type === 'hardware_failure') textEl.innerText = "Khô ráo";
+                if(alert.type === 'sensor_malfunction') textEl.innerText = "Bình thường";
+            }, 10000);
+        }
+    }
+});
+
         // KẾT THÚC CHÈN THÊM
 
 
