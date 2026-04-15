@@ -17,7 +17,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
-import cv2
+import queue
+mqtt_queue = queue.Queue()
 import numpy as np
 
 # Load biến môi trường từ file .env (cố định theo thư mục file này)
@@ -119,22 +120,39 @@ app.secret_key = os.getenv('SECRET_KEY', 'khoa_bi_mat_sieu_cap_aspc_2026')
 
 
 
-# BẮT ĐẦU THÊM CẤU HÌNH SQLALCHEMY 
+
+# BẮT ĐẦU CẤU HÌNH SQLALCHEMY (ĐÃ TỐI ƯU ĐA LUỒNG CHO IOT)
+
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'aspc_production.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# [1]: Ép SQLite chấp nhận nhiều luồng (Thread) ghi cùng lúc
+# [2]: Bật chế độ WAL (Write-Ahead Logging) để Đọc và Ghi không chặn nhau
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    "connect_args": {
+        "check_same_thread": False, # Cho phép MQTT Worker và Web Thread xài chung 1 kết nối
+        "timeout": 15               # Nếu có đứa đang ghi, bắt đứa sau phải chờ 15s
+    }
+}
+
 # CẤU HÌNH UPLOAD ẢNH
 UPLOAD_FOLDER = os.path.join(basedir, 'static/uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True) # Tự tạo thư mục nếu chưa có
+os.makedirs(UPLOAD_FOLDER, exist_ok=True) 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 db.init_app(app)
 
-# Tạo các bảng tự động dựa trên models.py
+# Tạo các bảng tự động và BẬT CHẾ ĐỘ WAL CỦA SQLITE
 with app.app_context():
     db.create_all()
-    print(" Đã khởi tạo Database Multi-tenant!")
-# KẾT THÚC THÊM CẤU HÌNH 
+    # Kích hoạt WAL (Write-Ahead Logging): X2 tốc độ ghi, chống "Database is locked"
+    db.session.execute(db.text('PRAGMA journal_mode=WAL;'))
+    db.session.commit()
+    print("🚀 Đã khởi tạo Database Multi-tenant (Chế độ WAL siêu tốc)!")
+
+# KẾT THÚC CẤU HÌNH SQLALCHEMY
+
 
 
 
@@ -490,7 +508,7 @@ def get_monthly_report(year, month):
                 extract('month', SensorData.timestamp) == month
             ).first()
 
-            # 3. ĐẾM SỐ BẢN GHI TỐT (Sức khỏe >= 80%) [ĐÃ XÓA GIẢ LẬP]
+            # 3. ĐẾM SỐ BẢN GHI TỐT (Sức khỏe >= 80%) 
             good_records = db.session.query(func.count(SensorData.id)).filter(
                 extract('year', SensorData.timestamp) == year,
                 extract('month', SensorData.timestamp) == month,
@@ -775,17 +793,38 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe(TOPIC_SUB)
 
 
-
-
+# 1. HÀM NHẬN TIN NHẮN SIÊU TỐC VÀO KHO
 def on_message(client, userdata, msg):
-    global system_state
     try:
         raw_msg = msg.payload.decode('utf-8')
-        # [DEBUG] In ra để xem ESP32 gửi cái gì lên
+        mqtt_queue.put(raw_msg) # Vứt vào hàng đợi
+    except Exception as e:
+        print(f"Lỗi nhận MQTT: {e}")
+
+# 2.  XỬ LÝ TRONG KHO 
+def mqtt_worker():
+    # Bắt buộc phải có app_context để ghi Database
+    with app.app_context(): 
+        while True:
+            try:
+                # Lấy tin nhắn ra khỏi hàng đợi 
+                raw_msg = mqtt_queue.get() 
+                if raw_msg:
+                    process_sensor_data(raw_msg) # Gọi hàm xử lý nặng ở đây
+                mqtt_queue.task_done()
+            except Exception as e:
+                print(f"Lỗi Worker xử lý data: {e}")
+
+
+def process_sensor_data(raw_msg):
+    global system_state
+    try:
+        
+        # In ra để xem ESP32 gửi cái gì lên
         print(f"📥 ESP32 Payload: {raw_msg}") 
         
         data = json.loads(raw_msg)
-#  BẮT ĐẦU THÊM MỚI 
+
         # Lấy mã thiết bị, nếu không có thì mặc định là ESP32_DEFAULT
         mac_address = data.get("mac_address", "ESP32_DEFAULT")
         
@@ -797,8 +836,8 @@ def on_message(client, userdata, msg):
         hotspot_brain = engines["hotspot"]
         #  KẾT THÚC THÊM MỚI 
 
-        current = data.get("current", None)  # A (dòng điện)
-        voltage = data.get("voltage", None)  # V (điện áp)
+        current = float(data.get("current", 0) or 0)  # A (dòng điện)
+        voltage = float(data.get("voltage", 0) or 0)  # V (điện áp)
 
 
 
@@ -833,7 +872,7 @@ def on_message(client, userdata, msg):
             calc_t = temp_env + (lux / 4000.0) # Fallback
 
         temp_panel = get_smooth_temp(calc_t)
-        #chèn thêm
+        
         check_protection_alerts(temp_panel, temp_env, humidity, lux, p_actual_W, pump_status, current, voltage)
 
       
@@ -842,7 +881,7 @@ def on_message(client, userdata, msg):
 
 
 
-        # [MỚI] QUY TRÌNH TÍNH SỨC KHỎE "TỰ HỌC"
+        # QUY TRÌNH TÍNH SỨC KHỎE "TỰ HỌC"
        
         # B1: Dạy cho hệ thống học (nếu trời đẹp)
         health_brain.learn(lux, p_actual_W)
@@ -913,13 +952,15 @@ def on_message(client, userdata, msg):
         # KẾT THÚC ĐOẠN LƯU DATABASE MỚI 
 
 
-        # Cập nhật AI (Dùng nhiệt độ đã làm mượt để AI không bị loạn)
+        # Cập nhật AI 
         data_package = [lux, temp_panel, temp_env, humidity, pump_status]
         ai_brain.update_data(data_package)
+
+        
         # Kiểm tra logic điều khiển (Gửi temp_panel đã mượt vào)
         check_system_decision(
-            mac_address, temp_panel, lux, health_brain.p_max, pump_status,
-            temp_env, humidity, wind_speed  # Thêm 3 biến này vào cuối
+            mac_address, temp_panel, temp_env, humidity, lux,wind_speed,
+        health_brain.p_max ,pump_status  
         )
 
         ai_result = ai_brain.predict(temp_env, humidity, lux, wind_speed, pump_status)
@@ -978,6 +1019,7 @@ def on_message(client, userdata, msg):
                 pump_reason = "Hệ thống tối ưu"
 
         # 3. Gửi dữ liệu ra web để hiển thị 
+        #bổ sung thêm 2 chế độ bật bơm khác nhau
         socketio.emit('sensor_data', {
             'temp_panel': round(temp_panel,2),
             'temp_env': round(temp_env,2),
@@ -999,7 +1041,7 @@ def on_message(client, userdata, msg):
             'hotspot_type': hotspot_type,
             'dust_level': round(dust_level, 1)
         })
-        # Safety override khi DANGER: dùng format command thống nhất với hệ thống
+        # Safety override khi DANGER  
         if hotspot_result['status'] == 'DANGER' and pump_status == 0:
             mqtt_client.publish(TOPIC_PUB, json.dumps({
                 "command": "2",
@@ -1042,135 +1084,6 @@ def run_mqtt():
         mqtt_client.loop_forever()
     except: pass
 
-
-
-
-
-
-
-
-
-# KHỐI LOGIC: XỬ LÝ VIDEO CAMERA AI 
-
-
-# 1. CẤU HÌNH NGUỒN CAMERA THÔNG MINH
-# Nếu trong file .env có CAMERA_URL (VD: rtsp://admin:pass@192.168.1.10:554/1), nó sẽ dùng Camera thật.
-# Nếu bỏ trống, hệ thống tự động fallback về video Demo.
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-env_camera_url = os.getenv("CAMERA_URL", "").strip()
-
-if env_camera_url:
-    VIDEO_SOURCE = env_camera_url
-    print(f"📷 [VISION AI] Đã kết nối luồng Camera thực tế: {VIDEO_SOURCE}")
-else:
-    VIDEO_SOURCE = os.path.join(BASE_DIR, "demo_solar.mp4")
-    print(f"🎬 [VISION AI] Đang chạy chế độ Demo Video: {VIDEO_SOURCE}")
-
-def generate_video_frames():
-    """Hàm tạo luồng hình ảnh liên tục cho Camera AI trên Web"""
-    cap = cv2.VideoCapture(VIDEO_SOURCE)
-    
-    # Nếu không mở được video, trả về ảnh đen báo lỗi
-    if not cap.isOpened():
-        error_img = np.zeros((480, 854, 3), dtype=np.uint8)
-        cv2.putText(error_img, f"ERROR: CANNOT LOAD CAMERA STREAM", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-        ret, buffer = cv2.imencode('.jpg', error_img)
-        frame_bytes = buffer.tobytes()
-        yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-        return
-    
-    frame_count = 0
-    last_alert_time = 0  # Biến chống spam cảnh báo
-    ALERT_COOLDOWN = 60  # Thời gian chờ giữa 2 lần báo động (60 giây)
-
-    while True:
-        success, frame = cap.read()
-        if not success:
-            # Nếu là camera IP thật bị rớt mạng -> Cố gắng kết nối lại
-            if env_camera_url:
-                time.sleep(0.1)
-                cap = cv2.VideoCapture(VIDEO_SOURCE)
-                continue
-            else:
-                # Nếu là video demo hết -> Tua lại từ đầu
-                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                continue
-            
-        frame_count += 1
-        
-        # Resize nhẹ để mượt mà trên web
-        frame = cv2.resize(frame, (854, 480))
-        annotated_frame = frame.copy()
-
-        warning_active = False
-
-        # --- Thuật toán lọc đốm bẩn / phân chim ---
-        hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        lower_white = np.array([0, 0, 160])    
-        upper_white = np.array([180, 50, 255]) 
-        mask = cv2.inRange(hsv_frame, lower_white, upper_white)
-
-        kernel = np.ones((5,5), np.uint8)
-        mask_clean = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-
-        contours, _ = cv2.findContours(mask_clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        for contour in contours:
-            area = cv2.contourArea(contour)
-            if 50 < area < 2000:
-                x, y, w, h = cv2.boundingRect(contour)
-                fake_prob = min(99, 75 + (int(area) % 24))
-                
-                cv2.rectangle(annotated_frame, (x, y), (x + w, y + h), (0, 165, 255), 2)
-                
-                if area > 300:
-                    cv2.putText(annotated_frame, f"Bird Drop {fake_prob}%", (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 165, 255), 1)
-                
-                warning_active = True
-
-        # --- LOGIC PHÁT CẢNH BÁO CHO HỆ THỐNG CHÍNH ---
-        if warning_active:
-            current_time = time.time()
-            # Bắn cảnh báo xuống web nếu đã qua thời gian Cooldown (60s/lần)
-            if current_time - last_alert_time > ALERT_COOLDOWN:
-                socketio.emit('system_alert', {
-                    'level': 'WARNING',
-                    'type': 'camera_ai',
-                    'message': '📷 CẢNH BÁO CAMERA: AI phát hiện có vết bẩn / phân chim chặn sáng trên tấm pin!'
-                })
-                last_alert_time = current_time
-
-        # --- Vẽ HUD (Giao diện Kính ngắm trên góc) ---
-        overlay = annotated_frame.copy()
-        cv2.rectangle(overlay, (0, 0), (854, 60), (0, 0, 0), -1)
-        cv2.addWeighted(overlay, 0.6, annotated_frame, 0.4, 0, annotated_frame)
-        
-        cv2.putText(annotated_frame, "ASPC VISION AI SCANNING...", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-        
-        if warning_active:
-            if frame_count % 10 < 5: 
-                cv2.putText(annotated_frame, "WARNING: HOTSPOT RISK DETECTED!", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-        else:
-            cv2.putText(annotated_frame, "STATUS: PANELS CLEAR", (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-
-        # Chuyển thành chuỗi byte JPG
-        ret, buffer = cv2.imencode('.jpg', annotated_frame)
-        frame_bytes = buffer.tobytes()
-        
-        # Trả về từng frame cho Web
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-
-
-
-
-
-
-
-@app.route('/video_feed')
-def video_feed():
-    """Route xuất luồng Video cho thẻ <img> trên giao diện hotspot.html"""
-    return Response(generate_video_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # [API MỚI] Lưu thông số tấm pin từ trang Parameter
 @app.route('/api/save_params', methods=['POST'])
@@ -1280,9 +1193,9 @@ def get_params_api():
         
         # Thông số kinh tế (MỚI)
         "p_pump": optimizer_brain.p_pump_cons,
-        # Ước lượng ngược lại số kWh từ giá (Chỉ mang tính tham khảo vì ta lưu giá chứ không lưu kWh)
-        # Tuy nhiên để đơn giản, ở bước này ta có thể trả về 0 hoặc lưu monthly_kwh vào biến riêng nếu muốn hiển thị chính xác.
-        # Ở đây tôi trả về giá trị mặc định để tránh lỗi JS
+        
+        
+        # Trả về dạng JS
         "monthly_kwh": monthly_kwh_val, 
         "alpha_p": optimizer_brain.alpha_p * 100 # Đổi lại về %
     })
@@ -1296,7 +1209,7 @@ def get_params_api():
 
 
 
-# --- CƠ CHẾ BẢO VỆ TRANG (LOGIN REQUIRED) ---
+# CƠ CHẾ BẢO VỆ TRANG (LOGIN REQUIRED) 
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -1313,7 +1226,6 @@ def login_required(f):
 
 
 
-# --- TÌM VÀ THAY THẾ HÀM LOGIN CŨ BẰNG ĐOẠN NÀY ---
 @app.route('/login', methods=['GET', 'POST'])
 def login_page():
     # Nếu đã đăng nhập từ trước
@@ -1347,13 +1259,7 @@ def login_page():
             
     return render_template('login.html')
 
-# --- DÁN THÊM ĐOẠN NÀY NGAY DƯỚI HÀM LOGIN ---
-# ==========================================
-# KHU VỰC SUPER ADMIN (COMMAND CENTER)
-# ==========================================
-# ==========================================
-# API HỘP THƯ THÔNG BÁO (NOTIFICATION)
-# ==========================================
+
 
 # 1. ADMIN GỬI THÔNG BÁO TỚI KHÁCH HÀNG
 @app.route('/api/admin/send_notification', methods=['POST'])
@@ -1587,7 +1493,6 @@ def get_economic_report_api(year, month):
 
 
 # API QUẢN LÝ HỒ SƠ NGƯỜI DÙNG (PROFILE)
-
 @app.route('/api/profile/update_tier', methods=['POST'])
 @login_required
 def update_tier():
@@ -1610,7 +1515,7 @@ def get_profile():
         "avatar": user.avatar or "",
         "last_password_change": user.last_password_change.strftime("%d/%m/%Y") if user.last_password_change else "Chưa từng đổi"
     })
-
+# CẬP NHẬT THÔNG TIN CÁ NHÂN (KHÔNG BAO GỒM MẬT KHẨU)
 @app.route('/api/profile/update_info', methods=['POST'])
 @login_required
 def update_info():
@@ -1701,7 +1606,7 @@ def handle_control(data):
             'level': 'warning', 
             'message': f' KHÔNG THỂ ĐIỀU KHIỂN! Hệ thống đang ở chế độ {system_state["mode"]}. Hãy chuyển sang THỦ CÔNG.'
         })
-        return # Thoát hàm, không thực hiện lệnh
+        return 
 #  Ghi nhớ người dùng vừa bấm COOL hay CLEAN
     system_state['last_manual_type'] = data.get('type', 'COOL')
     # 2. Truyền tín hiệu bật/tắt (1/0) vào thẳng biến toàn cục cho Giả Lập đọc
@@ -1967,7 +1872,7 @@ def run_simulation():
 if __name__ == '__main__':
     # 1. Chạy luồng MQTT thực
     threading.Thread(target=run_mqtt, daemon=True).start()
-    
+    threading.Thread(target=mqtt_worker, daemon=True).start()
     # 2. Nếu đang chế độ giả lập -> Chạy luồng giả lập
     if SIMULATION_MODE:
         threading.Thread(target=run_simulation, daemon=True).start()

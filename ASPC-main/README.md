@@ -13,7 +13,7 @@
 
 ASPC Pro không chỉ là một hệ thống bật/tắt bơm đơn thuần, mà là một **trợ lý vận hành năng lượng** toàn diện:
 - 👁️ **Vision AI (Camera Security):** Tự động phân tích luồng Video/RTSP bằng OpenCV để phát hiện phân chim, bụi bẩn, lá cây che khuất.
-- 🌡️ **Cảm biến nhiệt độ Ảo (NREL):** Loại bỏ hoàn toàn cảm biến nhiệt bề mặt vật lý (hay hỏng). Tính toán ngược nhiệt độ `T_cell` cực kỳ chính xác dựa trên Công suất và Bức xạ sáng.
+- 🌡️ **Cảm biến nhiệt độ Ảo (NREL):** Loại bỏ hoàn toàn cảm biến nhiệt bề mặt vật lý (hay hỏng). Tính toán ước lượng dựa trên học chuyển giao giai đoạn và mô hình AI tại biên.
 - 💦 **Quản lý Bơm Kép (Dual Pump):** Điều khiển độc lập hệ thống **Phun sương (Làm mát)** và **Xịt rửa áp lực cao (Làm sạch)** dựa trên phân tích điểm nóng (Hotspot).
 - ⛅ **Tích hợp Thời tiết (Weather API):** AI tự động kiểm tra xác suất mưa trong 3h tới để ra quyết định *Ngưng xịt nước* nhằm tiết kiệm chi phí.
 - 🔐 **Multi-tenant & Security:** Hệ thống cơ sở dữ liệu SQLAlchemy hỗ trợ Đăng nhập, Đăng ký, Phân quyền người dùng (Free/Pro) và quản lý nhiều trạm ESP32 cùng lúc.
