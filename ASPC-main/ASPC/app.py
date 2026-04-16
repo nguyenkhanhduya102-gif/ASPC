@@ -814,118 +814,80 @@ def mqtt_worker():
 def process_sensor_data(raw_msg):
     global system_state
     try:
-        
         # In ra để xem ESP32 gửi cái gì lên
         print(f"📥 ESP32 Payload: {raw_msg}") 
         
         data = json.loads(raw_msg)
-
-        # Lấy mã thiết bị, nếu không có thì mặc định là ESP32_DEFAULT
         mac_address = data.get("mac_address", "ESP32_DEFAULT")
         
-        # Gọi "bộ não" tương ứng của thiết bị này ra
         engines = get_engines(mac_address)
         ai_brain = engines["ai"]
         health_brain = engines["health"]
         optimizer_brain = engines["optimizer"]
         hotspot_brain = engines["hotspot"]
-        #  KẾT THÚC THÊM MỚI 
 
-        current = float(data.get("current", 0) or 0)  # A (dòng điện)
-        voltage = float(data.get("voltage", 0) or 0)  # V (điện áp)
+        current = float(data.get("current", 0) or 0)
+        voltage = float(data.get("voltage", 0) or 0)
 
-
-
-
-
-        # 1. ÉP KIỂU DỮ LIỆU AN TOÀN (Tránh lỗi String/None)
-        # Xử lý Nhiệt độ (Có lọc nhiễu)
-        
-        
+        # 1. LẤY DỮ LIỆU MÔI TRƯỜNG & BƠM
         temp_env = float(data.get('temp_env', 0) or 0)
         humidity = float(data.get('humidity', 0) or 0)
         lux = float(data.get('lux_ref', data.get('lux' , 0)) or 0)
-        pump_status = int(data.get('pump_status', 0) or 0)
         p_actual_W = float(data.get('power', 0) or 0)
 
-
-       
-
-        # Xử lý Trạng thái bơm (Quan trọng: Chấp nhận cả 1, "1", "true", "ON")
         raw_pump = data.get('pump_status', 0)
         pump_status = 1 if str(raw_pump).upper() in ['1', 'TRUE', 'ON'] else 0
-        # Lấy gió từ API
         wind_speed = get_current_wind_speed()
 
-        # Dùng AI để tính Nhiệt độ ảo và Dự báo
-        ai_result = ai_brain.predict(temp_env, humidity, lux, wind_speed, pump_status)
-        
-        if ai_result:
-            calc_t = ai_result["current_t_cell"]
-            socketio.emit('ai_data', {'ai': ai_result})
-        else:
-            calc_t = temp_env + (lux / 4000.0) # Fallback
+        # 2. LẤY NHIỆT ĐỘ TẤM PIN TỪ ESP32 (Do MLP dưới chip tính toán)
+        raw_temp_panel = float(data.get('temp_panel', 0) or 0)
+        temp_panel = get_smooth_temp(raw_temp_panel) # Làm mượt chống nhiễu
 
-        temp_panel = get_smooth_temp(calc_t)
-        
+        # 3. GỌI LSTM DỰ BÁO TƯƠNG LAI 15 PHÚT TỚI
+        ai_result = ai_brain.predict(temp_env, humidity, lux, wind_speed, pump_status)
+        if ai_result:
+            # Ghi đè nhiệt độ hiện tại bằng giá trị do ESP32 tính toán để hiển thị lên Web
+            ai_result["current_t_cell"] = round(temp_panel, 2)
+            socketio.emit('ai_data', {'ai': ai_result})
+
+        # 4. KIỂM TRA CẢNH BÁO VẬT LÝ
         check_protection_alerts(temp_panel, temp_env, humidity, lux, p_actual_W, pump_status, current, voltage)
 
-      
-    
-        
-
-
-
-        # QUY TRÌNH TÍNH SỨC KHỎE "TỰ HỌC"
-       
-        # B1: Dạy cho hệ thống học (nếu trời đẹp)
+        # 5. QUY TRÌNH TÍNH SỨC KHỎE
         health_brain.learn(lux, p_actual_W)
-        
-        # B2: Nhờ hệ thống tính toán Sức khỏe & Bức xạ (G)
         health_result = health_brain.calculate_health(lux, p_actual_W)
         
         if isinstance(health_result, tuple) and len(health_result) == 3:
-            # Nếu trả về đủ 3 giá trị (Phiên bản mới)
             health_score, g_meas, p_theory_val = health_result
         else:
-            # Nếu chỉ trả về 2 giá trị (Phiên bản cũ hoặc lỗi)
             health_score, g_meas = health_result if len(health_result) >= 2 else (0, 0)
-            p_theory_val = 0 # Gán mặc định để không bị crash
+            p_theory_val = 0
 
-
-
-
-        # Lấy tham số từ Optimizer và Health Engine
+        # 6. TÍNH TOÁN KINH TẾ
         p_max_current = health_brain.p_max
         alpha_p = optimizer_brain.alpha_p
         elec_price = optimizer_brain.elec_price
         
-        # Tính toán bước
         energy_manager.calculate_step(p_actual_W, lux, temp_env, p_max_current, alpha_p)
         stats = energy_manager.get_stats(elec_price)      
         socketio.emit('efficiency_data', stats)
 
-         # BẮT ĐẦU ĐOẠN LƯU DATABASE MỚI 
+        # 7. LƯU DATABASE
         try:
             with app.app_context():
-                # Tìm hoặc tạo thiết bị mặc định (để hệ thống cũ vẫn chạy được)
                 default_device = Device.query.first()
                 if not default_device:
-                    # Khởi tạo dữ liệu mẫu nếu DB trống
-                    user = User(username="admin0202@gmail.com", password_hash=generate_password_hash("02022005D@", method='pbkdf2:sha256')
-)
+                    # Tạo default nếu chưa có...
+                    user = User(username="admin0202@gmail.com", password_hash=generate_password_hash("02022005D@", method='pbkdf2:sha256'))
                     db.session.add(user)
                     db.session.commit()
-                    
                     station = Station(user_id=user.id, name="Trạm Mặc Định")
                     db.session.add(station)
                     db.session.commit()
-                    
                     default_device = Device(station_id=station.id, mac_address="ESP32_DEFAULT")
                     db.session.add(default_device)
                     db.session.commit()
 
-                # Thêm dòng dữ liệu mới
                 new_data = SensorData(
                     device_id=default_device.id,
                     temp_panel=temp_panel,
@@ -944,28 +906,15 @@ def process_sensor_data(raw_msg):
                 db.session.commit()
         except Exception as e:
             print(f"Lỗi lưu sensor history: {e}")
-        # KẾT THÚC ĐOẠN LƯU DATABASE MỚI 
 
-
-        # Cập nhật AI 
-        data_package = [lux, temp_panel, temp_env, humidity, pump_status]
-        ai_brain.update_data(data_package)
-
-        
-        # Kiểm tra logic điều khiển (Gửi temp_panel đã mượt vào)
+        # 8. KIỂM TRA LOGIC ĐIỀU KHIỂN BƠM (Dùng nhiệt độ thực từ ESP32)
         check_system_decision(
-            mac_address, temp_panel, temp_env, humidity, lux,wind_speed,
-        health_brain.p_max ,pump_status  
+            mac_address, temp_panel, temp_env, humidity, lux, wind_speed,
+            health_brain.p_max, pump_status  
         )
 
-        ai_result = ai_brain.predict(temp_env, humidity, lux, wind_speed, pump_status)
-        if ai_result:
-            socketio.emit('ai_data', {'ai': ai_result})
-
-
-
+        # 9. KIỂM TRA HOTSPOT & PHÂN LOẠI
         hotspot_result = hotspot_brain.detect(temp_panel, temp_env, lux, p_actual_W, p_theory_val)
-# Chuẩn hóa type để UI xử lý
         reason_lower = (hotspot_result.get('reason') or "").lower()
         hotspot_type = "normal"
         if "bụi" in reason_lower:
@@ -975,59 +924,40 @@ def process_sensor_data(raw_msg):
 
         dust_level = hotspot_result.get('risk_percent', 0) if hotspot_type == "dust" else 0
 
-
-        
-        #  DỊCH TRẠNG THÁI BƠM (DỮ LIỆU THẬT)
+        # 10. DỊCH TRẠNG THÁI BƠM & GỬI WEB
         pump_mode = "IDLE"
         pump_reason = "Đang chờ"
         
         if pump_status == 1:
             if system_state["mode"] == "MANUAL":
-                # Đọc lại xem người dùng vừa bấm nút nào
                 manual_type = system_state.get('last_manual_type', 'COOL')
-                if manual_type == 'CLEAN':
-                    pump_mode = "CLEANING"
-                    pump_reason = "Người dùng bật Làm Sạch"
-                else:
-                    pump_mode = "COOLING"
-                    pump_reason = "Người dùng bật Làm Mát"
-                    
+                pump_mode = "CLEANING" if manual_type == 'CLEAN' else "COOLING"
+                pump_reason = "Người dùng bật Làm Sạch" if manual_type == 'CLEAN' else "Người dùng bật Làm Mát"
             elif hotspot_result['status'] == 'DANGER':
                 pump_mode = "COOLING"
                 pump_reason = "Phun làm mát khẩn cấp (Hotspot)"
-                
-            # Logic Tự Động / Smart: Ưu tiên Làm Sạch nếu phát hiện rác/bụi/phân chim
             elif health_score < 85 and lux > 20000 and temp_panel < 50.0:
                 pump_mode = "CLEANING"
                 pump_reason = "Rửa trôi bề mặt (Bụi/Phân chim)"
-                
-            # Nếu không có rác, mà bơm vẫn chạy -> Chắc chắn là đang Làm mát
             else:
                 pump_mode = "COOLING"
                 pump_reason = "Tối ưu nhiệt độ (AI)"
         else:
-            if system_state["mode"] == "MANUAL":
-                pump_mode = "IDLE"
-                pump_reason = "Đã tắt (Thủ công)"
-            else:
-                pump_mode = "IDLE"
-                pump_reason = "Hệ thống tối ưu"
+            pump_mode = "IDLE"
+            pump_reason = "Đã tắt (Thủ công)" if system_state["mode"] == "MANUAL" else "Hệ thống tối ưu"
 
-        # 3. Gửi dữ liệu ra web để hiển thị 
-        #bổ sung thêm 2 chế độ bật bơm khác nhau
         socketio.emit('sensor_data', {
-            'temp_panel': round(temp_panel,2),
-            'temp_env': round(temp_env,2),
+            'temp_panel': round(temp_panel, 2),
+            'temp_env': round(temp_env, 2),
             'humidity': humidity,
             'lux': round(lux, 0),
-            'health_score': health_score, # Dữ liệu từ thuật toán mới
+            'health_score': health_score,
             'p_actual': round(p_actual_W, 2),
             'p_theory': round(p_theory_val, 2),
-            'g_meas': round(g_meas, 2),             # Gửi thêm Bức xạ tính toán để hiển thị nếu cần
+            'g_meas': round(g_meas, 2),
             'pump_status': pump_status,
             'pump_mode': pump_mode,      
             'pump_reason': pump_reason, 
-
             'hotspot_risk': hotspot_result['risk_percent'],
             'hotspot_status': hotspot_result['status'],
             'hotspot_reason': hotspot_result['reason'],
@@ -1036,7 +966,7 @@ def process_sensor_data(raw_msg):
             'hotspot_type': hotspot_type,
             'dust_level': round(dust_level, 1)
         })
-        # Safety override khi DANGER  
+
         if hotspot_result['status'] == 'DANGER' and pump_status == 0:
             mqtt_client.publish(TOPIC_PUB, json.dumps({
                 "command": "2",
@@ -1046,16 +976,7 @@ def process_sensor_data(raw_msg):
             pump_status = 1
             system_state["is_auto_running"] = True
             system_state["last_auto_start"] = time.time()
-
-
-
-
-
-
-
-
-
-
+            
             socketio.emit('system_alert', {
                 'level': 'CRITICAL',
                 'message': f"🚨 AI phát hiện HOTSPOT nguy hiểm. Tự động bật phun làm mát. Lý do: {hotspot_result['reason']}"
@@ -1066,6 +987,7 @@ def process_sensor_data(raw_msg):
         print(f" Lỗi dữ liệu không phải số: {e}")
     except Exception as e:
         print(f" Lỗi xử lý MQTT: {e}")
+
 
 mqtt_client = mqtt.Client()
 if MQTT_USERNAME: mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
