@@ -19,7 +19,7 @@ from datetime import datetime, timedelta
 from werkzeug.utils import secure_filename
 import queue
 mqtt_queue = queue.Queue()
-import numpy as np
+
 
 # Load biến môi trường từ file .env (cố định theo thư mục file này)
 try:
@@ -42,7 +42,7 @@ from flask_socketio import SocketIO, emit
 import paho.mqtt.client as mqtt
 from models import Notification, db, User, Station, Device, SensorData,CommandHistory
 from sqlalchemy import func, extract
-from ai_engine import SolarMLP
+from ai_engine import SolarLSTM
 from health_engine import SolarHealthEngine
 from optimizer import SolarOptimizer
 from hotspot_engine import HotspotDetector
@@ -53,9 +53,6 @@ DB_NAME = "aspc_history.db"
 
 SIMULATION_MODE = True #bật data giả lập
 #os.getenv("SIMULATION_MODE", "False").lower() == "true" 
-
-
-
 # MQTT CẤU HÌNH KẾT NỐI (đọc từ biến môi trường)
 BROKER = os.getenv("MQTT_BROKER", "localhost")
 PORT = int(os.getenv("MQTT_PORT", "8883"))
@@ -78,8 +75,6 @@ TEMP_THRESHOLD_HIGH = 40
 TEMP_THRESHOLD_SAFE = 35
 AUTO_DELAY_SECONDS = 60     
 MIN_RUN_TIME = 60
-
-
 
 # [CẬP NHẬT] Biến trạng thái hệ thống
 system_state = {
@@ -253,14 +248,14 @@ def get_engines(mac_address):
     if mac_address not in device_engines:
         print(f"⚙️ Khởi tạo bộ máy AI & Logic cho thiết bị: {mac_address}")
         device_engines[mac_address] = {
-            "ai": SolarMLP(mac_address=mac_address),
+            "ai": SolarLSTM(mac_address=mac_address),
             "health": SolarHealthEngine(mac_address=mac_address),
             "optimizer": SolarOptimizer(), # Optimizer không lưu file nên dùng mặc định
             "hotspot": HotspotDetector()   # Hotspot chỉ tính toán tức thời nên dùng mặc định
         }
     return device_engines[mac_address]
 
-
+#Cấu hình bộ nhớ đêm weather để tránh gọi API quá nhiều lần , giúp tăng tốc độ phản hồi và giảm chi phí
 class WeatherCache:
     def __init__(self, ttl_seconds: int = 600):
         self.ttl_seconds = ttl_seconds
