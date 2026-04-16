@@ -27,7 +27,7 @@ class SolarLSTM:
         self.SEQ_LEN = 10 
         self.num_features = 5 
         
-        
+        # BỘ ĐỆM GIỮ 10 RECORD GẦN NHẤT 
         self.sequence_buffer = deque(maxlen=self.SEQ_LEN)
         
         self.MAX_TRAIN_SIZE = 50000 
@@ -64,9 +64,13 @@ class SolarLSTM:
                     self.model.save(self.model_path) 
                 except: self.model = None
 
+    def update_data(self, basic_data):
+        
+        pass
+
     def _get_current_sequence(self, current_vector):
-       
-        # nhân bản phần tử hiện tại 
+        
+        # Nếu bộ đệm chưa đủ 10 phần tử (lúc mới khởi động)
         if len(self.sequence_buffer) == 0:
             for _ in range(self.SEQ_LEN):
                 self.sequence_buffer.append(current_vector)
@@ -139,7 +143,7 @@ class SolarLSTM:
             return temp_env + 2.0
             
     def _save_background_data(self, temp_env, humidity, lux, wind_speed, pump_status, target_t_cell):
-        #Lưu data phục vụ retrain
+       #lưu data để retrain
         try:
             cols = ['temp_env', 'humidity', 'lux', 'wind_speed', 'pump_status', 'target_t_cell']
             df = pd.DataFrame([[temp_env, humidity, lux, wind_speed, pump_status, target_t_cell]], columns=cols)
@@ -177,7 +181,7 @@ class SolarLSTM:
             print(f" Lỗi đánh giá: {e}")
 
     def create_dataset(self, X, y):
-        #Tạo siling cho qtrinh retrain
+        
         Xs, ys = [], []
         for i in range(len(X) - self.SEQ_LEN + 1):
             Xs.append(X[i : (i + self.SEQ_LEN)])
@@ -207,7 +211,7 @@ class SolarLSTM:
             joblib.dump(self.scaler, self.scaler_file)
             X_scaled = self.scaler.transform(X)
 
-            # ÁP DỤNG SLIDING WINDOW 
+            # ÁP DỤNG SLIDING WINDOW (Thay thế cho đoạn reshape lỗi cũ)
             X_lstm, y_lstm = self.create_dataset(X_scaled, y)
 
             split_idx = int(len(X_lstm) * 0.8)
@@ -233,11 +237,11 @@ class SolarLSTM:
                 self.evaluate_model(X_test, y_test)
                 self.model.save(self.model_path)
             
-            # Xóa bớt data cũ 
+            # Xóa bớt data 
             df.tail(1000).to_csv(self.data_file, index=False)
             
         except Exception as e:
-            print(f" Lỗi Retrain Trạm {self.mac_address}: {e}")
+            print(f"⚠️ Lỗi Retrain Trạm {self.mac_address}: {e}")
         finally: 
             self.is_training = False
 
